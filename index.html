@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security+ Study Lab</title>
+  <meta name="description" content="Interactive CompTIA Security+ (SY0-701) study app: lessons, practice questions, mock exams and performance-based questions.">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 4 7v8c0 7.5 5.1 13.6 12 15 6.9-1.4 12-7.5 12-15V7z' fill='%232563eb'/%3E%3Cpath d='m11 16 4 4 7-8' stroke='white' stroke-width='3' fill='none'/%3E%3C/svg%3E">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#/" aria-label="Security+ Study Lab home">
+        <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M16 2 4 7v8c0 7.5 5.1 13.6 12 15 6.9-1.4 12-7.5 12-15V7z" fill="currentColor"/><path d="m11 16 4 4 7-8" stroke="var(--bg)" stroke-width="3" fill="none"/></svg>
+        <span>Security+ Study Lab</span>
+        <span class="version-pill" id="versionPill" title="Exam version this app targets">SY0-701</span>
+      </a>
+      <nav class="mainnav" aria-label="Main">
+        <a href="#/" data-nav="home">Dashboard</a>
+        <a href="#/learn" data-nav="learn">Lecture</a>
+        <a href="#/test" data-nav="test">Test</a>
+        <a href="#/progress" data-nav="progress">Progress</a>
+        <a href="#/about" data-nav="about">About</a>
+      </nav>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle dark mode" title="Toggle light/dark theme">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3a9 9 0 1 0 9 9c0-.5 0-.9-.1-1.4A5.5 5.5 0 0 1 13.4 3.1 9 9 0 0 0 12 3z"/></svg>
+      </button>
+    </div>
+  </header>
+  <main id="main" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <footer class="footer">
+    <p>Independent study tool using original practice content. Not affiliated with or endorsed by CompTIA. CompTIA and Security+ are trademarks of CompTIA, Inc. Practice results are not predictions of official exam scores.</p>
+  </footer>
+
+  <script src="js/objectives.js"></script>
+  <script src="js/diagrams.js"></script>
+  <script src="js/content/lessons-d1.js"></script>
+  <script src="js/content/lessons-d2.js"></script>
+  <script src="js/content/lessons-d3.js"></script>
+  <script src="js/content/lessons-d4.js"></script>
+  <script src="js/content/lessons-d5.js"></script>
+  <script src="js/content/questions-d1.js"></script>
+  <script src="js/content/questions-d2.js"></script>
+  <script src="js/content/questions-d3.js"></script>
+  <script src="js/content/questions-d4.js"></script>
+  <script src="js/content/questions-d5.js"></script>
+  <script src="js/content/questions-scenarios.js"></script>
+  <script src="js/content/pbqs.js"></script>
+  <script src="js/grading.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/pbq-ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
