@@ -28,6 +28,22 @@ npm start            # serves http://localhost:8080  (PORT=3000 npm start to cha
 
 Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.server`.
 
+**Option 3: Windows executable.** `SecurityPlusStudyLab.exe` is a single file with no installation. Double-click it, and it starts a small local server on `127.0.0.1:47801` and opens the app in your default browser. Keep its console window open while you study, and close it to quit. Launching it again while it is running just reopens the browser.
+
+- The address stays the same on every launch, so your saved progress is found again. Progress stays in the browser you use, as in the other options.
+- The executable isn't code-signed, so Windows SmartScreen may warn about an unrecognized app on first launch. Choose **More info → Run anyway**.
+- It serves the app to this computer only (127.0.0.1) and doesn't connect to the internet.
+
+To build it yourself (Node 20 or later, on any OS):
+
+```bash
+npm install
+npm run build:exe            # dist/SecurityPlusStudyLab.exe (Windows x64)
+npm run build:exe -- linux   # dist/security-plus-study-lab-linux (on Linux)
+```
+
+The build uses Node’s [single executable applications](https://nodejs.org/api/single-executable-applications.html) feature. It downloads the official `node.exe` that matches your Node version from nodejs.org, checks it against the published SHA-256 checksums, embeds the app files and `desktop/launcher.js`, and writes the result to `dist/`. The executable is about 80 MB because it contains the Node runtime. If you are behind a proxy, set `NODE_USE_ENV_PROXY=1` so the download uses it. To run the launcher without building, use `npm run start:desktop`.
+
 ## Features
 
 ### Lecture
@@ -79,6 +95,7 @@ npm test             # content validation, grading logic, progress/spaced-review
 npm install          # installs Playwright for the browser test
 npx playwright install chromium
 npm run test:e2e     # end-to-end learning flow in headless Chromium
+E2E_BASE_URL=http://127.0.0.1:47801/ npm run test:e2e   # same flow against a running desktop build
 ```
 
 The unit tests check that every objective has a complete lesson, that the question bank is well formed (option explanations, multiple-response counts, coverage per objective and difficulty), and that every PBQ’s reference solution scores 100% while its starting state does not. They also cover firewall first-match and implicit-deny behavior, partial credit, alternative valid answers, the simulated shell, spaced-review intervals, recommendations and export/import.
@@ -100,6 +117,8 @@ js/store.js                Progress, spaced review, analytics
 js/pbq-ui.js               Interactive PBQ components
 js/app.js                  Router and views (Dashboard, Lecture, Test, Progress, About)
 server.js                  Zero-dependency static server
+desktop/launcher.js        Launcher bundled into the desktop executable
+scripts/build-exe.js       Builds the single-file executable
 tests/                     node:test unit tests and the Playwright end-to-end test
 ```
 

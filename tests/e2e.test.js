@@ -10,9 +10,10 @@ try { ({ chromium } = require('playwright')); } catch (e) { chromium = null; }
 const skip = chromium ? false : 'playwright is not installed (npm install, then npx playwright install chromium)';
 
 test('complete learning flow', { skip, timeout: 180000 }, async (t) => {
-  const server = createServer();
-  await new Promise((r) => server.listen(0, r));
-  const base = `http://localhost:${server.address().port}/`;
+  // E2E_BASE_URL tests an already-running build (e.g. the desktop executable) instead of the dev server.
+  const server = process.env.E2E_BASE_URL ? null : createServer();
+  if (server) await new Promise((r) => server.listen(0, r));
+  const base = process.env.E2E_BASE_URL || `http://localhost:${server.address().port}/`;
   const browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await context.newPage();
@@ -221,6 +222,6 @@ test('complete learning flow', { skip, timeout: 180000 }, async (t) => {
     assert.deepEqual(errors, [], 'no console or page errors');
   } finally {
     await browser.close();
-    server.close();
+    if (server) server.close();
   }
 });
