@@ -16,21 +16,38 @@ Everything runs locally. You don't need an account, a backend or a paid AI API.
 
 The version is shown in the side rail, at the bottom of the Today page and on the About page. To retarget the app to a future exam, update `js/objectives.js`.
 
-## Quick start
+## Downloads
 
-**Linux: AppImage.** Download `Security_Plus_Study_Lab-x86_64.AppImage` (about 1.5 MB), make it executable and run it:
+There are three downloads, one per platform. Each runs the whole app on your own computer. It never connects to the internet and needs no installation.
+
+| Platform | File | Size |
+|---|---|---|
+| Linux (x86_64) | `Security_Plus_Study_Lab-x86_64.AppImage` | about 1.5 MB |
+| Windows 10/11 (x64) | `SecurityPlusStudyLab.exe` | about 83 MB (includes the Node.js runtime) |
+| macOS (Apple silicon and Intel) | `SecurityPlusStudyLab-macOS.zip` | about 0.3 MB |
+
+They are attached to each [GitHub release](../../releases). To publish them for a new version, push a tag such as `v1.2.0`, or publish a release in the GitHub UI. The `Build downloads` workflow runs the tests, builds the three files and attaches them, with SHA-256 checksums in the release notes. To build them yourself, run `npm ci && npm run build:release`. This needs Node 20+, gcc, squashfs-tools, curl and python3, and leaves exactly those three files in `dist/`.
+
+**Linux.** Make the file executable and run it:
 
 ```bash
 chmod +x Security_Plus_Study_Lab-x86_64.AppImage
 ./Security_Plus_Study_Lab-x86_64.AppImage
 ```
 
-- If Chrome, Chromium, Edge, Brave or Vivaldi is installed, the app opens in its own window, and quitting happens when you close that window. It uses a separate browser profile in `~/.local/share/security-plus-study-lab/`, which is also where your progress is saved.
+- If Chrome, Chromium, Edge, Brave or Vivaldi is installed, the app opens in its own window and quits when you close it. Progress is saved in a separate browser profile in `~/.local/share/security-plus-study-lab/`.
 - Otherwise it opens in your default browser. Choose **Settings → Quit** to stop it, or it stops by itself 10 minutes after you close the tab.
-- It serves the app to this computer only (127.0.0.1:47801) and never connects to the internet.
-- If your system has no FUSE support, run it with `--appimage-extract-and-run`. Use `SECPLUS_BROWSER=firefox` (or any command) to choose the browser.
+- If your system has no FUSE support, run it with `--appimage-extract-and-run`. Set `SECPLUS_BROWSER=firefox` (or any command) to choose the browser.
 
-To build it: `npm run build:appimage` (needs gcc, squashfs-tools and curl). The launcher is a small static C program, `desktop/linux/launcher.c`, so the AppImage doesn't bundle a JavaScript runtime. The script builds a SquashFS image of the app and appends it to the official AppImage type 2 runtime. It downloads that runtime once and prints its checksum; set `RUNTIME_FILE` to use a copy you have verified.
+**Windows.** Double-click `SecurityPlusStudyLab.exe`. It opens the app in your default browser and keeps a small console window open while you study. Close that window, or choose **Settings → Quit**, to stop. The file isn't code-signed, so SmartScreen may show "Windows protected your PC"; choose **More info → Run anyway**.
+
+**macOS.** Unzip the file and move **Security+ Study Lab** to your Applications folder (this keeps your progress in one place), then open it.
+
+- If Chrome, Edge, Brave, Chromium or Vivaldi is installed, it opens in its own window with a dedicated profile in `~/Library/Application Support/Security Plus Study Lab/`. Otherwise it opens in your default browser.
+- The app isn't signed by an Apple developer ID. The first time, macOS will say it can't verify the developer. Click **Done**, then open **System Settings → Privacy & Security** and choose **Open Anyway**. On macOS 14 and earlier, you can instead Control-click the app, choose **Open**, then confirm.
+- The app is plain HTML inside a standard `.app` bundle with a small launcher script, so it runs on both Apple silicon and Intel Macs.
+
+### Other ways to run it
 
 **Option 1: open the file.** Double-click `index.html`. The app works from `file://` with no server.
 
@@ -42,21 +59,11 @@ npm start            # serves http://localhost:8080  (PORT=3000 npm start to cha
 
 Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.server`.
 
-**Option 3: Windows executable.** `SecurityPlusStudyLab.exe` is a single file with no installation. Double-click it, and it starts a small local server on `127.0.0.1:47801` and opens the app in your default browser. Keep its console window open while you study. Close it, or choose **Settings → Quit** in the app, to stop. Launching it again while it is running just reopens the browser.
+### How the downloads are built
 
-- The address stays the same on every launch, so your saved progress is found again. Progress stays in the browser you use, as in the other options.
-- The executable isn't code-signed, so Windows SmartScreen may warn about an unrecognized app on first launch. Choose **More info → Run anyway**.
-- It serves the app to this computer only (127.0.0.1) and doesn't connect to the internet.
-
-To build it yourself (Node 20 or later, on any OS):
-
-```bash
-npm install
-npm run build:exe            # dist/SecurityPlusStudyLab.exe (Windows x64)
-npm run build:exe -- linux   # dist/security-plus-study-lab-linux (on Linux)
-```
-
-The build uses Node’s [single executable applications](https://nodejs.org/api/single-executable-applications.html) feature. It downloads the official `node.exe` that matches your Node version from nodejs.org, checks it against the published SHA-256 checksums, embeds the app files and `desktop/launcher.js`, and writes the result to `dist/`. The executable is about 80 MB because it contains the Node runtime. If you are behind a proxy, set `NODE_USE_ENV_PROXY=1` so the download uses it. To run the launcher without building, use `npm run start:desktop`.
+- **Windows:** `npm run build:exe`. The build uses Node’s [single executable applications](https://nodejs.org/api/single-executable-applications.html) feature. It downloads the official `node.exe` that matches your Node version from nodejs.org, checks it against the published SHA-256 checksums, embeds the app files and `desktop/launcher.js`, and writes the result to `dist/`. The executable is about 80 MB because it contains the Node runtime. If you are behind a proxy, set `NODE_USE_ENV_PROXY=1` so the download uses it. To run the launcher without building, use `npm run start:desktop`.
+- **Linux:** `npm run build:appimage`. The launcher is a small static C program, `desktop/linux/launcher.c`, so the AppImage doesn't bundle a JavaScript runtime. The script builds a SquashFS image of the app and appends it to the official AppImage type 2 runtime. It downloads that runtime once and prints its checksum; set `RUNTIME_FILE` to use a copy you have verified.
+- **macOS:** `npm run build:mac`. Builds `Security+ Study Lab.app` with `desktop/mac/launcher.sh` as its executable and zips it with permissions preserved. It builds on any OS.
 
 ## Features
 
@@ -153,6 +160,10 @@ desktop/launcher.js        Launcher bundled into the Windows executable
 desktop/linux/launcher.c   Static launcher used inside the Linux AppImage
 scripts/build-exe.js       Builds the Windows single-file executable
 scripts/build-appimage.sh  Builds the Linux AppImage
+desktop/mac/launcher.sh    Launcher script inside the macOS .app bundle
+scripts/build-mac.sh       Builds the zipped macOS .app
+scripts/build-release.sh   Builds all three downloads into dist/
+.github/workflows/         Builds the downloads and attaches them to GitHub releases
 tests/                     node:test unit tests and the Playwright end-to-end test
 ```
 
