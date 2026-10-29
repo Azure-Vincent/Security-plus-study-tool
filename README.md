@@ -26,7 +26,7 @@ There are three downloads, one per platform. Each runs the whole app on your own
 | Windows 10/11 (x64) | `SecurityPlusStudyLab.exe` | about 83 MB (includes the Node.js runtime) |
 | macOS (Apple silicon and Intel) | `SecurityPlusStudyLab-macOS.zip` | about 0.3 MB |
 
-They are attached to each [GitHub release](../../releases). To publish them for a new version, push a tag such as `v1.2.0`, or publish a release in the GitHub UI. The `Build downloads` workflow runs the tests, builds the three files and attaches them, with SHA-256 checksums in the release notes. To build them yourself, run `npm ci && npm run build:release`. This needs Node 20+, gcc, squashfs-tools, curl and python3, and leaves exactly those three files in `dist/`.
+They are attached to each [GitHub release](../../releases). To publish them for a new version, push a tag such as `v1.0.2`, publish a release in the GitHub UI, or run the **Build downloads** workflow from the Actions tab and enter the new tag. The `Build downloads` workflow runs the tests, builds the three files and attaches them, with SHA-256 checksums in the release notes. To build them yourself, run `npm ci && npm run build:release`. This needs Node 20+, gcc, squashfs-tools, curl and python3, and leaves exactly those three files in `dist/`.
 
 **Linux.** Make the file executable and run it:
 
