@@ -1,6 +1,6 @@
-/* Builds a single-file executable of the app with Node's Single Executable Applications feature.
-     npm run build:exe            -> dist/SecurityPlusStudyLab.exe        (Windows x64)
-     npm run build:exe -- linux   -> dist/security-plus-study-lab-linux   (Linux x64, uses this Node binary)
+/* Builds the Windows executable with Node's Single Executable Applications feature.
+     npm run build:exe   -> dist/SecurityPlusStudyLab.exe (Windows x64)
+   (Linux uses the AppImage and macOS uses the .app bundle; see scripts/build-release.sh.)
    Windows builds download the official node.exe for the running Node version from nodejs.org
    and verify it against the published SHA-256 checksums before using it. */
 'use strict';
@@ -55,11 +55,10 @@ async function windowsRuntime() {
 
 async function main() {
   const targets = {
-    win: { out: 'SecurityPlusStudyLab.exe', runtime: windowsRuntime },
-    linux: { out: 'security-plus-study-lab-linux', runtime: async () => { if (process.platform !== 'linux') throw new Error('Build the Linux executable on Linux.'); return process.execPath; } }
+    win: { out: 'SecurityPlusStudyLab.exe', runtime: windowsRuntime }
   };
   const t = targets[target];
-  if (!t) { console.error('Unknown target "' + target + '". Use: win or linux'); process.exit(1); }
+  if (!t) { console.error('Unknown target "' + target + '". Use: win'); process.exit(1); }
   fs.mkdirSync(CACHE, { recursive: true });
   fs.mkdirSync(DIST, { recursive: true });
 

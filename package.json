@@ -1,6 +1,6 @@
 {
   "name": "security-plus-study-lab",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Interactive CompTIA Security+ (SY0-701) study app with lessons, practice questions, timed mock exams, PBQ simulations and spaced review. Runs entirely in the browser.",
   "private": true,
   "scripts": {
@@ -10,7 +10,9 @@
     "test:all": "npm test && npm run test:e2e",
     "build:exe": "node scripts/build-exe.js",
     "start:desktop": "node desktop/launcher.js",
-    "build:appimage": "bash scripts/build-appimage.sh"
+    "build:appimage": "bash scripts/build-appimage.sh",
+    "build:mac": "bash scripts/build-mac.sh",
+    "build:release": "bash scripts/build-release.sh"
   },
   "devDependencies": {
     "playwright": "~1.56.1",
