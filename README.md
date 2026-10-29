@@ -1,8 +1,8 @@
 # Security+ Study Lab
 
-An interactive study app for **CompTIA Security+ SY0-701**. It teaches each exam objective from the ground up, then reinforces it with exam-style questions, performance-based simulations (PBQs), timed mock exams and spaced review.
+A calm, focused study app for **CompTIA Security+ SY0-701**. It teaches each exam objective from the ground up, then gives you plenty of ways to practice: smart practice sets, endless drills, flashcards, term quizzes, hands-on labs (PBQs), timed mock exams and spaced review.
 
-Everything runs locally in the browser. You don't need an account, a backend or a paid AI API.
+Everything runs locally. You don't need an account, a backend or a paid AI API.
 
 ## Exam version
 
@@ -14,9 +14,23 @@ Everything runs locally in the browser. You don't need an account, a backend or 
 | Domains | 1.0 General Security Concepts (12%) · 2.0 Threats, Vulnerabilities, and Mitigations (22%) · 3.0 Security Architecture (18%) · 4.0 Security Operations (28%) · 5.0 Security Program Management and Oversight (20%) |
 | Next version | CompTIA has announced **SY0-801**. Published reports give an English launch around November 17, 2026 and SY0-701 English retirement on June 11, 2027. Confirm on comptia.org before you book. |
 
-The version is shown in the app header, on the dashboard and on the About page. To retarget the app to a future exam, update `js/objectives.js`.
+The version is shown in the side rail, at the bottom of the Today page and on the About page. To retarget the app to a future exam, update `js/objectives.js`.
 
 ## Quick start
+
+**Linux: AppImage.** Download `Security_Plus_Study_Lab-x86_64.AppImage` (about 1.5 MB), make it executable and run it:
+
+```bash
+chmod +x Security_Plus_Study_Lab-x86_64.AppImage
+./Security_Plus_Study_Lab-x86_64.AppImage
+```
+
+- If Chrome, Chromium, Edge, Brave or Vivaldi is installed, the app opens in its own window, and quitting happens when you close that window. It uses a separate browser profile in `~/.local/share/security-plus-study-lab/`, which is also where your progress is saved.
+- Otherwise it opens in your default browser. Choose **Settings → Quit** to stop it, or it stops by itself 10 minutes after you close the tab.
+- It serves the app to this computer only (127.0.0.1:47801) and never connects to the internet.
+- If your system has no FUSE support, run it with `--appimage-extract-and-run`. Use `SECPLUS_BROWSER=firefox` (or any command) to choose the browser.
+
+To build it: `npm run build:appimage` (needs gcc, squashfs-tools and curl). The launcher is a small static C program, `desktop/linux/launcher.c`, so the AppImage doesn't bundle a JavaScript runtime. The script builds a SquashFS image of the app and appends it to the official AppImage type 2 runtime. It downloads that runtime once and prints its checksum; set `RUNTIME_FILE` to use a copy you have verified.
 
 **Option 1: open the file.** Double-click `index.html`. The app works from `file://` with no server.
 
@@ -28,7 +42,7 @@ npm start            # serves http://localhost:8080  (PORT=3000 npm start to cha
 
 Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.server`.
 
-**Option 3: Windows executable.** `SecurityPlusStudyLab.exe` is a single file with no installation. Double-click it, and it starts a small local server on `127.0.0.1:47801` and opens the app in your default browser. Keep its console window open while you study, and close it to quit. Launching it again while it is running just reopens the browser.
+**Option 3: Windows executable.** `SecurityPlusStudyLab.exe` is a single file with no installation. Double-click it, and it starts a small local server on `127.0.0.1:47801` and opens the app in your default browser. Keep its console window open while you study. Close it, or choose **Settings → Quit** in the app, to stop. Launching it again while it is running just reopens the browser.
 
 - The address stays the same on every launch, so your saved progress is found again. Progress stays in the browser you use, as in the other options.
 - The executable isn't code-signed, so Windows SmartScreen may warn about an unrecognized app on first launch. Choose **More info → Run anyway**.
@@ -46,6 +60,21 @@ The build uses Node’s [single executable applications](https://nodejs.org/api/
 
 ## Features
 
+### Designed for long study sessions
+- **Easy on the eyes:** a low-glare palette with light, dark and **sepia** themes, adjustable **text size**, and the Atkinson Hyperlegible typeface (bundled, so it works offline). It was designed for legibility and clearly separates `0`/`O` and `1`/`l`/`I`, which matters for IPs, ports and hashes.
+- **Four destinations:** Today, Learn, Practice and Progress, in a side rail on desktop and a bottom tab bar on phones.
+- **Focus mode:** practice sessions, flashcards and exams hide all navigation and show a progress track.
+- **Keyboard first:** choose answers with `1`–`5` or `A`–`E`, press `Enter` to check and continue, `Space` to flip a flashcard, `1`/`2` to grade it, and `F` to flag an exam item.
+- **Today page:** a daily goal ring and streak, one-click **Practice now**, review and flashcards due, where to continue reading, and your weakest objectives with direct Practice buttons.
+
+### Ways to practice
+- **Smart practice** (5, 10, 20 or 40 questions) mixes questions due for review, your weakest objectives, term quizzes and new questions weighted by domain.
+- **Endless drill** keeps serving questions until you stop, on all topics, your focus areas, or any lesson.
+- **Try a similar question** after a miss adds a fresh question on the same objective right away.
+- **Flashcards:** 204 key terms from the lessons, scheduled with spaced repetition. **Term quizzes:** 200 generated “which term matches this description?” questions with every option explained.
+- **Topic picker** by domain or objective with length (including endless), difficulty, and term-quiz options.
+- Every lesson ends with practice, drill and flashcard buttons for that objective.
+
 ### Lecture
 - **28 lessons**, one per SY0-701 objective, grouped by domain. Each lesson shows the official objective it covers.
 - Every lesson defines its key terms and acronyms, explains concepts in plain language, and uses SVG **diagrams**, worked examples and security scenarios.
@@ -53,9 +82,9 @@ The build uses Node’s [single executable applications](https://nodejs.org/api/
 - **Side-by-side comparisons** of commonly confused concepts, such as IDS vs IPS, RPO vs RTO, SAML vs OAuth vs OIDC, and the agreement types.
 - Each lesson ends with **key takeaways** and a **Practice this topic** button that starts questions on that objective immediately, plus links to related PBQs.
 
-### Test center
-- **333 original questions** covering all 28 objectives (8 or more each): single-answer, multiple-response (“Select TWO”) and scenario-based, at three difficulty levels.
-- **Topic practice** by objective or domain, **mixed review** weighted by domain, **retry missed** questions, and **spaced review**.
+### Questions and exams
+- **360 original questions** covering all 28 objectives (12 or more each): single-answer, multiple-response (“Select TWO”) and scenario-based, at three difficulty levels.
+- **Retry missed** questions and **spaced review** of everything you got wrong.
 - **Practice mode** gives immediate feedback: why the best answer is best, and why each other option is right or wrong.
 - **Timed mock exams**: a full-length mock (4 PBQs + 76 questions, 90 min), a quick mock (1 PBQ + 24 questions, 30 min) and domain-focused exams. Exam mode withholds feedback until you submit, supports **flag for review**, has a navigator and a review screen, auto-submits when time runs out, and survives page reloads.
 
@@ -83,7 +112,8 @@ Drag-and-drop works with a mouse, touch (select an item, then tap “Place here�
 
 ### Progress and reinforcement
 - Tracks accuracy by **domain and objective**, recent accuracy, and PBQ results. Mastery blends recent questions (75%) with PBQ scores (25%).
-- **Weak-area recommendations** on the dashboard link straight to the matching lesson and practice.
+- A **daily goal** (10, 20, 30 or 50 questions and cards), a **streak**, and a 16-week **activity map**.
+- **Focus areas** on the Today page link straight to the matching lesson and practice.
 - **Spaced review** uses a Leitner schedule (due now → 1 → 3 → 7 → 16 → 35 days). Review sessions mix in **fresh, unseen questions** on the same objectives, so you practice the concept rather than memorizing answers.
 - Progress is **saved automatically** in `localStorage`. Use Export/Import (JSON) to move it between browsers.
 - **Practice performance and the readiness estimate are kept separate.** The readiness indicator is labeled as an estimate, is not converted to CompTIA’s 100–900 scale, and is never presented as a pass/fail prediction.
@@ -91,7 +121,7 @@ Drag-and-drop works with a mouse, touch (select an item, then tap “Place here�
 ## Tests
 
 ```bash
-npm test             # content validation, grading logic, progress/spaced-review store (node:test, no dependencies)
+npm test             # content, grading, store, flashcards, streaks and generated questions (node:test, no dependencies)
 npm install          # installs Playwright for the browser test
 npx playwright install chromium
 npm run test:e2e     # end-to-end learning flow in headless Chromium
@@ -100,25 +130,29 @@ E2E_BASE_URL=http://127.0.0.1:47801/ npm run test:e2e   # same flow against a ru
 
 The unit tests check that every objective has a complete lesson, that the question bank is well formed (option explanations, multiple-response counts, coverage per objective and difficulty), and that every PBQ’s reference solution scores 100% while its starting state does not. They also cover firewall first-match and implicit-deny behavior, partial credit, alternative valid answers, the simulated shell, spaced-review intervals, recommendations and export/import.
 
-The end-to-end test goes through the full flow: dashboard → lesson → knowledge check → practice from the lesson → persistence across reload → spaced review → PBQs (firewall, click-to-place and HTML5 drag-and-drop, ordering, terminal) → timed mock exam with flagging and submission → results and progress pages. It also checks that the layout has no horizontal scrolling at phone width.
+The end-to-end test covers the full flow: Today → lesson and quick check → keyboard-only practice from the lesson → persistence and the daily goal → spaced review → similar question and endless drill → flashcards → topic picker → labs (firewall, click-to-place and drag-and-drop, ordering, terminal) → timed mock exam with flagging → results → progress → settings → phone layout with no horizontal scrolling. Point it at a desktop build with `E2E_BASE_URL` to test the AppImage or Windows launcher the same way.
 
 ## Project structure
 
 ```
 index.html                 App shell (no build step)
-css/styles.css             Responsive light/dark styles
+css/styles.css             Responsive styles with light, dark and sepia themes
+fonts/                     Atkinson Hyperlegible Next and Mono (SIL Open Font License)
 js/objectives.js           Exam metadata, domains, objectives, content helpers
 js/diagrams.js             SVG diagram builders used by lessons
 js/content/lessons-d*.js   Lessons for domains 1–5
 js/content/questions-*.js  Question bank
 js/content/pbqs.js         PBQ scenarios, reference solutions and walkthroughs
+js/practice-gen.js         Flashcards and term quizzes generated from lesson key terms
 js/grading.js              Pure grading logic and the simulated shell (shared with tests)
-js/store.js                Progress, spaced review, analytics
+js/store.js                Progress, spaced review, flashcards, daily goal, streak, analytics
 js/pbq-ui.js               Interactive PBQ components
-js/app.js                  Router and views (Dashboard, Lecture, Test, Progress, About)
+js/app.js                  Router and views (Today, Learn, Practice, sessions, flashcards, exams, labs, Progress)
 server.js                  Zero-dependency static server
-desktop/launcher.js        Launcher bundled into the desktop executable
-scripts/build-exe.js       Builds the single-file executable
+desktop/launcher.js        Launcher bundled into the Windows executable
+desktop/linux/launcher.c   Static launcher used inside the Linux AppImage
+scripts/build-exe.js       Builds the Windows single-file executable
+scripts/build-appimage.sh  Builds the Linux AppImage
 tests/                     node:test unit tests and the Playwright end-to-end test
 ```
 

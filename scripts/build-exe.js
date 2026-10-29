@@ -26,7 +26,7 @@ function appFiles() {
     const rel = dir + '/' + d.name;
     if (d.isDirectory()) walk(rel); else out.push(rel);
   });
-  walk('css'); walk('js');
+  walk('css'); walk('js'); walk('fonts');
   return out;
 }
 

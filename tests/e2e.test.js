@@ -1,16 +1,15 @@
-/* End-to-end test of the complete learning flow in a real browser (Playwright + Chromium).
-   Run: npm run test:e2e   (requires the `playwright` package and a Chromium build) */
+/* End-to-end test of the complete study flow in a real browser (Playwright + Chromium).
+   Run: npm run test:e2e   (requires the `playwright` package and a Chromium build)
+   E2E_BASE_URL tests an already-running build (e.g. a desktop package) instead of the dev server. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createServer } = require('../server');
 
 let chromium;
 try { ({ chromium } = require('playwright')); } catch (e) { chromium = null; }
-
 const skip = chromium ? false : 'playwright is not installed (npm install, then npx playwright install chromium)';
 
-test('complete learning flow', { skip, timeout: 180000 }, async (t) => {
-  // E2E_BASE_URL tests an already-running build (e.g. the desktop executable) instead of the dev server.
+test('complete study flow', { skip, timeout: 240000 }, async (t) => {
   const server = process.env.E2E_BASE_URL ? null : createServer();
   if (server) await new Promise((r) => server.listen(0, r));
   const base = process.env.E2E_BASE_URL || `http://localhost:${server.address().port}/`;
@@ -21,122 +20,159 @@ test('complete learning flow', { skip, timeout: 180000 }, async (t) => {
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('dialog', (d) => d.accept());
+  const text = (sel) => page.textContent(sel);
 
   try {
-    await t.test('dashboard shows the exam version', async () => {
+    await t.test('Today shows the goal, a one-click practice start and the exam version', async () => {
       await page.goto(base);
-      await page.waitForSelector('.version-banner');
-      assert.match(await page.textContent('.version-banner'), /SY0-701/);
-      assert.match(await page.textContent('#versionPill'), /SY0-701/);
+      await page.evaluate(() => localStorage.clear());
+      await page.reload();
+      await page.waitForSelector('.start-main');
+      assert.match(await text('.today-top'), /0\s*of 20/);
+      assert.match(await text('.version-note summary'), /SY0-701/);
+      assert.equal(await page.locator('#railNav a').count(), 4, 'four destinations');
     });
 
-    await t.test('lecture lists every objective and a lesson teaches with checks', async () => {
-      await page.click('nav.mainnav >> text=Lecture');
-      await page.waitForSelector('.lesson-list');
-      assert.equal(await page.locator('.lesson-link').count(), 28);
+    await t.test('Lesson: reading view with checks, then practice straight from the lesson', async () => {
+      await page.click('#railNav a[href="#/learn"]');
+      await page.waitForSelector('.rows');
+      assert.equal(await page.locator('.domain .rowlink').count(), 28);
       await page.click('a[href="#/learn/1.1"]');
       await page.waitForSelector('.lesson-body');
-      assert.ok(await page.locator('.diagram svg').count() >= 1, 'lesson has diagrams');
-      assert.ok(await page.locator('.compare table').count() >= 1, 'lesson has comparisons');
+      assert.ok(await page.locator('.diagram svg').count() >= 1);
+      assert.ok(await page.locator('.compare table').count() >= 1);
       const kc = page.locator('.kcheck').first();
       await kc.locator('label.opt', { hasText: 'Operational' }).click();
       await kc.locator('[data-checkbtn]').click();
       assert.match(await kc.locator('.kfeedback').textContent(), /Correct/);
-      assert.equal(await kc.locator('.opt-why:not([hidden])').count(), 4, 'every option is explained');
+      assert.equal(await kc.locator('.why:not([hidden])').count(), 4, 'every option explained');
       await page.check('#lessonDone');
+      await page.locator('.lesson-head [data-practice="1.1"]').click();
+      await page.waitForSelector('.opt');
+      assert.ok(await page.evaluate(() => document.body.classList.contains('focus')), 'focus mode hides navigation');
     });
 
     let missed = 0;
-    await t.test('practice starts directly from the lesson with immediate explanations', async () => {
-      await page.locator('.lesson-head [data-practice="1.1"]').click();
-      await page.waitForSelector('.qcard');
-      assert.match(await page.textContent('.session-head'), /1\.1/);
+    await t.test('Practice session works entirely from the keyboard, with explanations', async () => {
       for (let i = 0; i < 10; i++) {
-        assert.match(await page.textContent('.q-meta'), /Objective 1\.1/, 'questions stay on the lesson topic');
-        await page.locator('.qcard label.opt').first().click();
-        await page.click('#checkBtn');
+        assert.match(await text('.qmeta'), /^1\.1/, 'stays on the lesson topic');
+        const multi = await page.locator('.opt.multi').count();
+        await page.keyboard.press('1');
+        if (multi) await page.keyboard.press('2');
+        await page.keyboard.press('Enter');
         await page.waitForSelector('#feedback');
-        const nOpts = await page.locator('.qcard label.opt').count();
-        assert.equal(await page.locator('.qcard .opt-why').count(), nOpts, 'explanations for correct and incorrect choices');
+        assert.equal(await page.locator('.opt .why').count(), await page.locator('.opt').count(), 'every option explained');
         if (await page.locator('#feedback.bad').count()) missed++;
-        await page.click('#nextBtn');
+        await page.keyboard.press('Enter');
       }
-      await page.waitForSelector('text=Session complete');
+      await page.waitForSelector('text=By objective');
+      assert.match(await text('.summary-score'), /\/10/);
     });
 
-    await t.test('progress persists across a reload and missed items enter spaced review', async () => {
+    await t.test('Progress persists across reload; the daily goal updates; missed items enter review', async () => {
       await page.goto(base + '#/');
       await page.reload();
-      await page.waitForSelector('.stats-grid');
-      assert.match(await page.textContent('.stats-grid'), /Questions answered\s*10/);
-      assert.match(await page.textContent('.stats-grid'), /Lessons completed\s*1 \/ 28/);
+      await page.waitForSelector('.today-top');
+      assert.match(await text('.today-top'), /10\s*of 20/);
       const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('secplus.progress.v1')));
       assert.equal(Object.keys(stored.q).length, 10);
+      assert.ok(stored.lessons['1.1'].done);
       if (missed) {
-        await page.goto(base + '#/test');
-        await page.click('button[data-act="review"]');
-        await page.waitForSelector('.qcard');
-        assert.match(await page.textContent('.session-head'), /Spaced review/);
+        await page.click('.alt[data-act="review"]');
+        await page.waitForSelector('.opt');
+        assert.match(await text('.sbar'), /Spaced review/);
       }
     });
 
-    await t.test('firewall PBQ grades partial credit and demonstrates a solution', async () => {
+    await t.test('Try a similar question after a miss, and endless drill keeps going', async () => {
+      await page.goto(base + '#/practice');
+      await page.click('.tile [data-drill=""]');
+      await page.waitForSelector('.opt');
+      for (let i = 0; i < 7; i++) {
+        await page.locator('.opt').first().click();
+        if (await page.locator('.opt.multi').count()) await page.locator('.opt').nth(1).click();
+        await page.click('#checkBtn');
+        await page.waitForSelector('#feedback');
+        if (await page.locator('#similarBtn').count()) {
+          const before = await page.evaluate(() => Store.data.practice.qids.length);
+          await page.click('#similarBtn');
+          await page.waitForSelector('.opt input:not(:disabled)');
+          assert.equal(await page.evaluate(() => Store.data.practice.qids.length), before + 1);
+        } else {
+          await page.click('#nextBtn');
+        }
+      }
+      assert.match(await text('.sbar .count'), /7 answered/, 'drill extends past the first batch');
+      await page.click('#endBtn');
+      await page.waitForSelector('text=By objective');
+    });
+
+    await t.test('Flashcards flip and grade from the keyboard', async () => {
+      await page.goto(base + '#/');
+      await page.click('.alt[data-cards]');
+      await page.waitForSelector('#card');
+      await page.keyboard.press(' ');
+      await page.waitForSelector('#knew');
+      await page.keyboard.press('2');
+      await page.keyboard.press(' ');
+      await page.keyboard.press('1');
+      assert.match(await text('.sbar .count'), /Card 3 of 21/, 'a missed card goes back in the deck');
+      const cards = await page.evaluate(() => Store.data.cards);
+      assert.equal(Object.keys(cards).length, 2);
+    });
+
+    await t.test('Topic picker starts a filtered session', async () => {
+      await page.goto(base + '#/practice');
+      await page.click('#topics details:nth-of-type(4) summary');
+      await page.check('input[name="obj"][value="4.6"]');
+      await page.check('input[name="n"][value="5"]', { force: true });
+      await page.click('#topicForm button[type="submit"]');
+      await page.waitForSelector('.opt');
+      assert.match(await text('.sbar .count'), /of 5/);
+      assert.match(await text('.qmeta'), /^4\.6/);
+    });
+
+    await t.test('Firewall lab: partial credit, then a valid rule set earns full credit', async () => {
       await page.goto(base + '#/pbq/fw-dmz');
       await page.waitForSelector('.fw-table');
       await page.click('button[aria-label="Delete rule 1"]');
       await page.click('#submitPBQ');
-      await page.waitForSelector('.pbq-score');
-      const pctText = await page.textContent('.pbq-score .big-num');
-      const pct = parseInt(pctText, 10);
-      assert.ok(pct > 0 && pct < 100, `partial credit expected, got ${pctText}`);
-      assert.ok(await page.locator('.fb-list li').count() >= 12);
+      const pct = parseInt(await text('.pbq-score .big-num'), 10);
+      assert.ok(pct > 0 && pct < 100, 'partial credit');
       assert.ok(await page.locator('.solution li').count() >= 3, 'step-by-step solution');
       await page.click('[data-showsol]');
-      assert.equal(await page.locator('.fw-table tbody tr:not(.fw-implicit)').count(), 6, 'reference rules displayed');
-    });
+      assert.equal(await page.locator('.fw-table tbody tr:not(.fw-implicit)').count(), 6);
 
-    await t.test('firewall PBQ: building a valid rule set earns full credit', async () => {
       await page.goto(base + '#/pbq/fw-iot');
-      await page.waitForSelector('.fw-table');
       await page.evaluate(() => sessionStorage.clear());
       await page.reload();
       await page.waitForSelector('.fw-table');
-      // Fix rule 1 to cameras -> NVR RTSP, rule 2 to security desk -> NVR, then add the vendor update rule.
-      const set = async (n, f, v) => page.selectOption(`select[aria-label="Rule ${n} ${f}"]`, v);
+      const set = (n, f, v) => page.selectOption(`select[aria-label="Rule ${n} ${f}"]`, v);
       await set(1, 'protocol', 'TCP'); await set(1, 'destination', 'NVR'); await set(1, 'destination port', '554');
       await set(2, 'source', 'SEC');
       await page.click('text=+ Add rule');
       await set(3, 'source', 'NVR'); await set(3, 'destination', 'VENDOR'); await set(3, 'destination port', '443');
       await page.click('#submitPBQ');
-      await page.waitForSelector('.pbq-score');
-      assert.equal((await page.textContent('.pbq-score .big-num')).trim(), '100%');
+      assert.equal((await text('.pbq-score .big-num')).trim(), '100%');
     });
 
-    await t.test('drag-and-drop PBQ works with keyboard-accessible click-to-place', async () => {
+    await t.test('Drag-and-drop labs: click-to-place and mouse drag', async () => {
       await page.goto(base + '#/pbq/control-types');
       await page.waitForSelector('.pool');
       const plan = await page.evaluate(() => SEC.pbqs.find((p) => p.id === 'control-types').tokens.map((t) => [t.id, t.accept[0]]));
-      for (const [tok, zone] of plan) {
-        await page.click(`[data-token="${tok}"]`);
-        await page.click(`[data-zonebtn="${zone}"]`);
-      }
+      for (const [tok, zone] of plan) { await page.click(`[data-token="${tok}"]`); await page.click(`[data-zonebtn="${zone}"]`); }
       await page.click('#submitPBQ');
-      await page.waitForSelector('.pbq-score');
-      assert.equal((await page.textContent('.pbq-score .big-num')).trim(), '100%');
-    });
-
-    await t.test('network diagram PBQ renders links and supports HTML5 drag and drop', async () => {
-      // Tall viewport so the pool and the drop zone are both on screen during the mouse drag.
-      await page.setViewportSize({ width: 1280, height: 1600 });
+      assert.equal((await text('.pbq-score .big-num')).trim(), '100%');
+      await page.setViewportSize({ width: 1280, height: 1700 });
       await page.goto(base + '#/pbq/net-placement');
       await page.waitForSelector('.netmap');
-      assert.ok(await page.locator('.netlinks line').count() >= 10, 'diagram connections drawn');
+      assert.ok(await page.locator('.netlinks line').count() >= 10);
       await page.dragAndDrop('[data-token="waf"]', '.zone[data-zone="dmzweb"]');
       assert.equal(await page.locator('.zone[data-zone="dmzweb"] [data-token="waf"]').count(), 1);
       await page.setViewportSize({ width: 1280, height: 900 });
     });
 
-    await t.test('ordering PBQ with tied ranks reaches full credit via move buttons', async () => {
+    await t.test('Ordering and terminal labs', async () => {
       await page.goto(base + '#/pbq/volatility');
       await page.waitForSelector('.order-list');
       const target = await page.evaluate(() => Grading.solutionState(SEC.pbqs.find((p) => p.id === 'volatility')).order);
@@ -148,74 +184,72 @@ test('complete learning flow', { skip, timeout: 180000 }, async (t) => {
         }
       }
       await page.click('#submitPBQ');
-      await page.waitForSelector('.pbq-score');
-      assert.equal((await page.textContent('.pbq-score .big-num')).trim(), '100%');
-    });
-
-    await t.test('terminal PBQ runs commands and grades answers', async () => {
+      assert.equal((await text('.pbq-score .big-num')).trim(), '100%');
       await page.goto(base + '#/pbq/term-compromise');
-      await page.waitForSelector('.terminal');
-      const run = async (cmd) => { await page.fill('.term-in input', cmd); await page.press('.term-in input', 'Enter'); };
-      await run('grep "45.33.32.156" /var/log/auth.log | grep -c Failed');
+      await page.fill('.term-in input', 'grep "45.33.32.156" /var/log/auth.log | grep -c Failed');
+      await page.press('.term-in input', 'Enter');
       await page.waitForFunction(() => /\n20$/.test(document.querySelector('.term-out').textContent));
-      await run('ps aux | grep kworker');
-      assert.match(await page.textContent('.term-out'), /45\.33\.32\.156:4444/);
-      await page.fill('#tq-ip', '45.33.32.156');
-      await page.fill('#tq-acct', 'deploy');
-      await page.fill('#tq-fails', '20');
+      await page.fill('#tq-ip', '45.33.32.156'); await page.fill('#tq-acct', 'deploy'); await page.fill('#tq-fails', '20');
       await page.click('#submitPBQ');
-      await page.waitForSelector('.pbq-score');
-      const pct = parseInt(await page.textContent('.pbq-score .big-num'), 10);
-      assert.ok(pct >= 40 && pct < 100, `partial credit for 3 of 7 answers, got ${pct}`);
+      const pct = parseInt(await text('.pbq-score .big-num'), 10);
+      assert.ok(pct >= 40 && pct < 100);
     });
 
-    await t.test('timed mock exam: no feedback until submit, flag for review, results with disclaimer', async () => {
-      await page.goto(base + '#/test');
+    await t.test('Timed mock exam: no feedback, flagging, review screen, results with disclaimer', async () => {
+      await page.goto(base + '#/practice');
       await page.click('button[data-exam="quick"]');
       await page.waitForSelector('#timer');
-      assert.match(await page.textContent('#timer'), /^(30:00|29:5\d)$/);
-      assert.equal(await page.locator('.pbq-exam').count(), 1, 'quick mock opens with a PBQ');
+      assert.match(await text('#timer'), /^(30:00|29:5\d)$/);
       await page.click('#nextBtn');
-      await page.waitForSelector('.qcard input[name="q"]');
-      await page.locator('.qcard label.opt').first().click();
-      assert.equal(await page.locator('#feedback, .opt-why').count(), 0, 'exam mode withholds feedback');
-      await page.click('#flagBtn');
-      assert.match(await page.textContent('#flagBtn'), /Flagged/);
+      await page.waitForSelector('.opt input');
+      await page.keyboard.press('1');
+      assert.equal(await page.locator('#feedback, .why').count(), 0, 'exam mode withholds feedback');
+      await page.keyboard.press('f');
+      assert.match(await text('#flagBtn'), /Flagged/);
       await page.click('#reviewBtn');
-      await page.waitForSelector('#submitBtn');
-      assert.match(await page.textContent('main'), /1 flagged/);
+      assert.match(await text('main'), /1 flagged/);
       await page.click('#submitBtn');
-      await page.waitForSelector('.score-card');
-      assert.match(await page.textContent('.score-card'), /not a predicted CompTIA score/);
-      assert.ok(await page.locator('#itemList .review-item').count() === 25);
-      await page.click('input[name="flt"][value="flag"]');
-      assert.equal(await page.locator('#itemList .review-item:not([hidden])').count(), 1, 'flag filter');
+      await page.waitForSelector('.summary-score');
+      assert.match(await text('main'), /not a predicted CompTIA score/);
+      assert.equal(await page.locator('#itemList .review-item').count(), 25);
+      await page.check('input[name="flt"][value="flag"]', { force: true });
+      assert.equal(await page.locator('#itemList .review-item:not([hidden])').count(), 1);
     });
 
-    await t.test('progress page separates performance from the readiness estimate', async () => {
+    await t.test('Progress separates scores from the readiness estimate', async () => {
       await page.goto(base + '#/progress');
-      await page.waitForSelector('.obj-table');
-      const txt = await page.textContent('main');
-      assert.match(txt, /Practice performance/);
-      assert.match(txt, /Estimate, not a score prediction/);
-      assert.match(txt, /Mock exam history/);
+      const body = await text('main');
+      assert.match(body, /By objective/);
+      assert.match(body, /Readiness estimate/);
+      assert.match(body, /not a CompTIA score/);
       assert.equal(await page.locator('.obj-table tbody tr').count(), 28);
+      assert.ok(await page.locator('.heat i').count() >= 106);
     });
 
-    await t.test('theme toggle switches to dark mode', async () => {
-      await page.click('#themeToggle');
-      const theme = await page.evaluate(() => document.documentElement.getAttribute('data-theme'));
-      assert.ok(theme === 'dark' || theme === 'light');
+    await t.test('Settings: theme, text size and daily goal persist', async () => {
+      await page.click('.rail [data-open-settings]');
+      await page.check('#settings input[name="theme"][value="sepia"]', { force: true });
+      await page.check('#settings input[name="text"][value="l"]', { force: true });
+      await page.check('#settings input[name="goal"][value="30"]', { force: true });
+      await page.keyboard.press('Escape');
+      await page.reload();
+      await page.waitForSelector('.stats');
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'sepia');
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.text), 'l');
+      await page.goto(base + '#/');
+      assert.match(await text('.today-top'), /of 30/);
     });
 
-    await t.test('layouts fit a phone screen without horizontal scrolling', async () => {
-      const phone = await browser.newPage({ viewport: { width: 375, height: 800 } });
-      for (const h of ['#/', '#/learn/3.2', '#/test', '#/pbq/net-placement', '#/pbq/fw-dmz', '#/progress']) {
+    await t.test('Phone layout: bottom tabs and no sideways scrolling', async () => {
+      const phone = await browser.newPage({ viewport: { width: 375, height: 800 }, hasTouch: true });
+      for (const h of ['#/', '#/learn', '#/learn/3.2', '#/practice', '#/pbq/net-placement', '#/pbq/fw-dmz', '#/progress', '#/about']) {
         await phone.goto(base + h);
-        await phone.waitForTimeout(150);
+        await phone.waitForTimeout(120);
         const overflow = await phone.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         assert.ok(overflow <= 1, `${h} overflows by ${overflow}px`);
       }
+      assert.ok(await phone.locator('.tabs a').first().isVisible(), 'bottom tab bar visible');
+      assert.ok(!(await phone.locator('.rail').isVisible()), 'rail hidden on phones');
       await phone.close();
     });
 

@@ -8,13 +8,13 @@
   var GRADUATED = 5;
 
   function blank() {
-    return { v: 1, created: Date.now(), q: {}, obj: {}, pbq: {}, lessons: {}, exams: [], settings: {}, activeExam: null, practice: null, lastResult: null };
+    return { v: 1, created: Date.now(), q: {}, obj: {}, pbq: {}, lessons: {}, exams: [], settings: {}, activeExam: null, practice: null, lastResult: null, daily: {}, cards: {} };
   }
   var memoryOnly = false;
   function load() {
     try {
       var raw = window.localStorage.getItem(KEY);
-      if (raw) return Object.assign(blank(), JSON.parse(raw));
+      if (raw) { var d = Object.assign(blank(), JSON.parse(raw)); d.daily = d.daily || {}; d.cards = d.cards || {}; return d; }
     } catch (e) { memoryOnly = true; }
     return blank();
   }
@@ -50,12 +50,14 @@
       o.recent.push(correct ? 1 : 0);
       if (o.recent.length > 12) o.recent.shift();
       o.t = now;
+      bump('q'); if (correct) bump('c');
       Store.save();
     },
 
     recordPBQ: function (pbq, score, mode) {
       var r = data.pbq[pbq.id] || (data.pbq[pbq.id] = { attempts: 0, best: 0 });
       r.attempts++; r.last = score; r.best = Math.max(r.best, score); r.t = Date.now(); r.mode = mode;
+      bump('p');
       Store.save();
     },
 
@@ -70,6 +72,45 @@
       l.checks[idx] = correct;
       l.visited = Date.now();
       Store.save();
+    },
+
+    /* ---------- Flashcards (same Leitner schedule as questions) ---------- */
+    recordCard: function (cardId, knew) {
+      var now = Date.now();
+      var r = data.cards[cardId] || (data.cards[cardId] = { n: 0, k: 0, box: 0 });
+      r.n++; r.t = now;
+      if (knew) { r.k++; r.box = Math.min(GRADUATED, r.box + 1); r.due = now + INTERVALS[r.box]; }
+      else { r.box = 0; r.due = now; }
+      bump('cards');
+      Store.save();
+    },
+    // Cards to study now: due cards first, then cards never seen. `ids` limits the scope.
+    cardQueue: function (ids, limit, now) {
+      now = now || Date.now();
+      var due = ids.filter(function (id) { var r = data.cards[id]; return r && r.box < GRADUATED && r.due <= now; });
+      due.sort(function (a, b) { return data.cards[a].due - data.cards[b].due; });
+      var fresh = ids.filter(function (id) { return !data.cards[id]; });
+      return { due: due, fresh: fresh, queue: due.concat(fresh).slice(0, limit || 20) };
+    },
+    cardsLearned: function () { return Object.keys(data.cards).filter(function (id) { return data.cards[id].box >= 1; }).length; },
+
+    /* ---------- Daily activity, goal and streak ---------- */
+    today: function () { return data.daily[dayKey(Date.now())] || {}; },
+    todayCount: function () { var d = Store.today(); return (d.q || 0) + (d.cards || 0); },
+    goal: function () { return data.settings.goal || 20; },
+    streak: function () {
+      var n = 0, t = Date.now();
+      if (!active(dayKey(t))) t -= DAY; // a streak survives until the end of today
+      while (active(dayKey(t))) { n++; t -= DAY; }
+      return n;
+    },
+    activity: function (days) {
+      var out = [];
+      for (var i = days - 1; i >= 0; i--) {
+        var k = dayKey(Date.now() - i * DAY), d = data.daily[k] || {};
+        out.push({ day: k, n: (d.q || 0) + (d.cards || 0), q: d.q || 0, c: d.c || 0 });
+      }
+      return out;
     },
 
     /* ---------- Spaced review ---------- */
@@ -152,6 +193,13 @@
     }
   };
 
+  function dayKey(t) { var d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function active(k) { var d = data.daily[k]; return !!d && ((d.q || 0) + (d.cards || 0) + (d.p || 0)) > 0; }
+  function bump(kind) {
+    var k = dayKey(Date.now()), d = data.daily[k] || (data.daily[k] = {});
+    d[kind] = (d[kind] || 0) + 1;
+  }
+  Store.dayKey = dayKey;
   Store.INTERVALS = INTERVALS;
   Store.GRADUATED = GRADUATED;
   window.Store = Store;
