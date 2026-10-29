@@ -2,20 +2,26 @@ name: Build downloads
 
 # Builds the three downloads (Linux AppImage, Windows .exe, macOS .app zip).
 # - Push a tag like v1.2.0, or publish a release in the GitHub UI: the files are attached to that release.
-# - Run it manually from the Actions tab: the files are kept as a workflow artifact.
+# - Run it manually from the Actions tab: the files are kept as a workflow artifact. Enter a tag such as
+#   v1.0.2 to also create that tag on the selected branch and publish a release with the files.
 on:
   push:
     tags: ['v*']
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Create a release with this tag (for example v1.0.2). Leave empty to only build.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 # A tag push and a release publish can both fire for the same version; run them one at a time.
 concurrency:
-  group: downloads-${{ github.event.release.tag_name || github.ref_name }}
+  group: downloads-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -48,14 +54,15 @@ jobs:
           if-no-files-found: error
 
       - name: Attach the files to the GitHub release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release' || inputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.release.tag_name || github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
         run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then echo "Tag must look like v1.2.3, got: $TAG" >&2; exit 1; fi
           NOTES="$(cd dist && echo 'Downloads for Linux (AppImage), Windows (.exe) and macOS (.app in a zip). See the README for how to run each one.' && echo && echo 'SHA-256 checksums:' && echo '```' && sha256sum * && echo '```')"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --title "Security+ Study Lab $TAG" --notes "$NOTES"
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Security+ Study Lab $TAG" --notes "$NOTES"
           fi
