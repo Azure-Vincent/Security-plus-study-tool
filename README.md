@@ -4,6 +4,8 @@ A calm, focused study app for **CompTIA Security+ SY0-701**. It teaches each exa
 
 Everything runs locally. You don't need an account, a backend or a paid AI API.
 
+See [ROADMAP.md](ROADMAP.md) for what is covered for each exam objective, where coverage is thinner, and what comes next.
+
 ## Exam version
 
 | | |
@@ -163,6 +165,7 @@ scripts/build-appimage.sh  Builds the Linux AppImage
 desktop/mac/launcher.sh    Launcher script inside the macOS .app bundle
 scripts/build-mac.sh       Builds the zipped macOS .app
 scripts/build-release.sh   Builds all three downloads into dist/
+scripts/roadmap.js         Generates ROADMAP.md coverage tables from the app content
 .github/workflows/         Builds the downloads and attaches them to GitHub releases
 tests/                     node:test unit tests and the Playwright end-to-end test
 ```
