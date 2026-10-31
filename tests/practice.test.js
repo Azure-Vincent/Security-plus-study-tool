@@ -14,8 +14,8 @@ test('every objective has at least 12 authored questions', () => {
 test('flashcards are built from every lesson’s key terms', () => {
   const { SEC } = load();
   const total = Object.values(SEC.lessons).reduce((a, L) => a + L.terms.length, 0);
-  assert.equal(SEC.terms.length, total);
-  assert.equal(new Set(SEC.terms.map((t) => t.id)).size, total, 'card ids are unique');
+  assert.equal(SEC.terms.filter((t) => t.id.startsWith('card-')).length, total, 'one card per lesson key term');
+  assert.equal(new Set(SEC.terms.map((t) => t.id)).size, SEC.terms.length, 'card ids are unique');
   SEC.terms.forEach((t) => { assert.ok(t.term && t.def && !/[<>]/.test(t.term), `clean text for ${t.id}`); });
 });
 
@@ -75,4 +75,20 @@ test('older saved progress without new fields still loads', () => {
   env.Store.importJSON(env.storage['secplus.progress.v1']);
   assert.ok(env.Store.data.cards && env.Store.data.daily);
   assert.equal(env.Store.todayCount(), 0);
+});
+
+test('acronym deck: every acronym is quizzed, new ones get cards, no duplicates with lesson terms', () => {
+  const { SEC } = load();
+  const acrs = SEC.acronyms.map((a) => a[0]);
+  assert.equal(new Set(acrs.map((a) => a.toLowerCase())).size, acrs.length, 'acronyms are unique');
+  SEC.acronyms.forEach((a) => {
+    assert.ok(SEC.objById(a[2]), `${a[0]} has a valid objective`);
+    assert.ok(a[1].length > 3 && a[3].length > 10, `${a[0]} has an expansion and description`);
+  });
+  const quizzes = SEC.termQuestions.filter((q) => q.acr);
+  assert.equal(quizzes.length, SEC.acronyms.length, 'one quiz per acronym');
+  quizzes.forEach((q) => assert.equal(new Set(q.o.map((o) => o[0])).size, 4, `${q.id} has four distinct options`));
+  const lessonTerms = new Set(SEC.terms.filter((t) => !t.kind).flatMap((t) => t.term.split('/').map((x) => x.trim().toLowerCase())));
+  SEC.terms.filter((t) => t.kind === 'acronym').forEach((t) => assert.ok(!lessonTerms.has(t.term.toLowerCase()), `${t.term} duplicates a lesson card`));
+  assert.ok(SEC.terms.filter((t) => t.acronym).length >= 120, 'acronym-only deck includes lesson acronyms');
 });

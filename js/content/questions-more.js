@@ -202,3 +202,100 @@ SEC.addQuestions('5.6', [
     ['Discipline everyone who did not report', 'Punishment discourages engagement.']
   ], ex: 'Effective programs measure and improve both avoiding clicks and reporting threats.' }
 ]);
+
+/* Scenario-based and advanced questions for objectives that had fewer of them. */
+SEC.addQuestions('2.2', [
+  { d: 3, s: 'A software company notices that a widely used open-source logging library it bundles was updated by a new maintainer. The update quietly sends environment variables to an external server.', q: 'Which threat vector does this BEST represent, and what control would have reduced the risk?', o: [
+    ['Supply chain (software provider); pin and review dependency versions and monitor packages before updating', 'The compromise arrived through a trusted third-party component. Dependency pinning, review and package monitoring reduce the risk.', true],
+    ['Watering hole; block the library’s website', 'No website the victims visit was compromised.'],
+    ['Default credentials; change the library’s password', 'Libraries do not have default credentials.'],
+    ['Removable media; disable USB ports', 'The code arrived through the package update process.']
+  ], ex: 'Open-source dependencies are part of the supply chain. Software composition analysis, version pinning and review of maintainer changes help catch malicious updates.' }
+]);
+
+SEC.addQuestions('2.3', [
+  { d: 3, s: 'A developer stores uploaded profile pictures in a cloud bucket. A tester finds that changing the image ID in the URL from 1041 to 1042 shows another customer’s private document, and the bucket allows public listing.', q: 'Which TWO vulnerabilities are present?', o: [
+    ['Misconfiguration (publicly listable cloud storage)', 'Public listing of a bucket holding private files is a cloud misconfiguration.', true],
+    ['Broken access control (insecure direct object reference) in the web app', 'The app returns objects by ID without checking that they belong to the requester.', true],
+    ['Buffer overflow', 'No memory corruption is involved.'],
+    ['VM escape', 'No virtualization breakout is involved.']
+  ], ex: 'Cloud misconfigurations and missing authorization checks are common, high-impact web vulnerabilities. Fix both: make the bucket private and check object ownership on every request.' }
+]);
+
+SEC.addQuestions('3.1', [
+  { d: 3, s: 'A startup moves its monolithic app to containers in a managed Kubernetes service. To save time, every container runs as root with the host’s Docker socket mounted, and images are pulled from public registries without scanning.', q: 'Which change MOST reduces the risk of one compromised container taking over the host?', o: [
+    ['Stop running containers as privileged root with the host socket mounted, and use minimal, scanned images', 'Privileged containers with the host socket can control the host. Removing that access and scanning images limits the blast radius.', true],
+    ['Move the app back to a single monolithic VM', 'This gives up the benefits without fixing the actual misconfiguration.'],
+    ['Increase the number of container replicas', 'Scaling does not change isolation.'],
+    ['Disable logging to improve performance', 'This reduces visibility.']
+  ], ex: 'Containers share the host kernel, so privileged containers and mounted host sockets break isolation. Least privilege and image hygiene are the core controls.' }
+]);
+
+SEC.addQuestions('3.3', [
+  { d: 3, s: 'A multinational stores customer records in a cloud region in the United States. A new regulation in one of its markets requires residents’ personal data to stay in that country, and analysts in other countries only need aggregated statistics.', q: 'Which approach BEST meets the requirement?', o: [
+    ['Store those residents’ data in an in-country region and give other analysts only aggregated or masked data', 'This meets data sovereignty rules and limits exposure through minimization and masking.', true],
+    ['Encrypt the data and keep it in the US region', 'Encryption does not satisfy a data residency requirement.'],
+    ['Copy the data to every region for availability', 'This violates the residency requirement.'],
+    ['Tokenize only the names and keep everything else in the US', 'The rest of the personal data still leaves the country.']
+  ], ex: 'Data sovereignty is about where data is stored and processed. Combine geographic restrictions with minimization so other teams see only what they need.' }
+]);
+
+SEC.addQuestions('4.1', [
+  { d: 3, s: 'A hospital’s staff use personally owned phones to read clinical messages. Security wants to wipe hospital data from a lost phone without touching personal photos, and to block access from jailbroken devices.', q: 'Which solution BEST meets both needs?', o: [
+    ['MDM with a managed work profile (containerization) and a compliance policy that blocks jailbroken devices', 'A work container allows selective wipe, and compliance checks detect and block jailbroken devices.', true],
+    ['Require a 4-digit PIN only', 'A PIN does not separate data or detect jailbreaks.'],
+    ['Full device wipe through the carrier', 'This erases personal data on employee-owned phones.'],
+    ['Disable Wi-Fi on all phones', 'This does not address either requirement.']
+  ], ex: 'For BYOD, MDM with containerization balances privacy and security, and compliance policies enforce device health.' }
+]);
+
+SEC.addQuestions('4.2', [
+  { d: 2, s: 'During an audit, the security team finds 37 laptops in the asset inventory that no one can locate. Several were assigned to employees who left in the past year.', q: 'Which process change would BEST prevent this from happening again?', o: [
+    ['Make asset return and inventory update a required step in the offboarding checklist, with regular reconciliation', 'Offboarding should recover assets, and periodic reconciliation catches gaps early.', true],
+    ['Buy cheaper laptops', 'Cost does not address the tracking gap.'],
+    ['Remove the missing laptops from the inventory', 'This hides the problem and the possible data exposure.'],
+    ['Disable full-disk encryption to speed up repairs', 'This increases the risk from lost devices.']
+  ], ex: 'Asset management spans the lifecycle. Tie assignment and return to HR events, and reconcile the inventory regularly. Remotely lock or wipe devices that are not recovered.' }
+]);
+
+SEC.addQuestions('4.4', [
+  { d: 3, s: 'A SOC receives 4,000 alerts a day, and analysts close most of them without investigation. Last month a real intrusion alert sat unread for three days.', q: 'Which action would MOST improve detection effectiveness?', o: [
+    ['Tune noisy rules with narrow exceptions, correlate related events, and prioritize alerts by severity and asset value', 'Reducing noise and adding context lets analysts focus on the alerts that matter.', true],
+    ['Disable all medium and low severity rules', 'This would hide real attacks that start as low-severity signals.'],
+    ['Hire more analysts and keep every rule as is', 'This helps but does not address the root cause: alert fatigue from noise.'],
+    ['Increase log retention to five years', 'Retention does not improve triage.']
+  ], ex: 'Alert fatigue is a classic monitoring failure. Tuning, correlation and prioritization (often with SOAR) restore the signal.' }
+]);
+
+SEC.addQuestions('4.7', [
+  { d: 3, s: 'A company automates account provisioning from its HR system. A bug in a new mapping rule gives every new hire in Sales the Finance role, and the error spreads to 60 accounts before anyone notices.', q: 'Which TWO controls would have MOST reduced the impact?', o: [
+    ['Test automation changes in a staging environment through change management before release', 'Testing catches mapping errors before they reach production.', true],
+    ['Alert on unusual privilege assignments, such as a spike in Finance role grants', 'Monitoring the automation’s output detects mistakes quickly.', true],
+    ['Remove all automation and provision accounts by hand', 'This loses the consistency and speed benefits instead of managing the risk.'],
+    ['Give the automation account domain admin rights', 'This increases the impact of any error.']
+  ], ex: 'Automation multiplies both good and bad changes. Treat it like code: test it, control changes to it, and monitor what it does.' }
+]);
+
+SEC.addQuestions('5.1', [
+  { d: 3, s: 'Each business unit of a fast-growing company writes its own security rules. Auditors find three different password standards and no consistent incident response process, and the board wants consistency without slowing teams down.', q: 'Which governance approach BEST addresses this?', o: [
+    ['A central information security policy and standards set by a governance committee, with business units writing procedures within them', 'Centralized policy and standards give consistency, while local procedures keep teams flexible.', true],
+    ['Let each unit keep its own rules and compare them yearly', 'This keeps the inconsistency the auditors found.'],
+    ['Replace all policies with optional guidelines', 'Guidelines are not mandatory, so nothing becomes consistent.'],
+    ['Have the help desk write the policies', 'Policy is set by management and governance bodies.']
+  ], ex: 'Policies and standards set the mandatory baseline, and procedures describe how each team meets it. A governance committee keeps them current.' },
+  { d: 3, s: 'A cloud payroll provider processes employee data for a company under the company’s instructions. After a breach at the provider, regulators ask the company who was responsible for deciding why and how employee data was processed.', q: 'Which statement is MOST accurate?', o: [
+    ['The company is the data controller and remains accountable; the provider is a processor acting on its instructions', 'Controllers decide purposes and means, and keep accountability even when processing is outsourced.', true],
+    ['The provider becomes the data owner because it stores the data', 'Storing data does not transfer ownership or controller duties.'],
+    ['No one is accountable because the data was in the cloud', 'Accountability does not disappear in the cloud.'],
+    ['The employees are the processors', 'Employees are the data subjects.']
+  ], ex: 'Outsourcing processing does not outsource accountability. Contracts, due diligence and audits manage the processor’s risk.' }
+]);
+
+SEC.addQuestions('5.5', [
+  { d: 3, s: 'A penetration tester is hired to test only the company’s public web servers. During testing, she finds credentials that would let her reach the internal HR database.', q: 'What should she do?', o: [
+    ['Stop at the scope boundary, document the finding and notify the client contact as the rules of engagement require', 'Testing outside the authorized scope is not permitted, even when it is technically possible.', true],
+    ['Use the credentials to prove impact on the HR database', 'This goes beyond written authorization.'],
+    ['Post the credentials publicly to warn employees', 'This would expose the client.'],
+    ['Ignore the finding because it is out of scope', 'It is a serious finding that the client needs to know about.']
+  ], ex: 'Rules of engagement define scope, contacts and how to handle critical findings. Out-of-scope discoveries are reported, not exploited.' }
+]);
