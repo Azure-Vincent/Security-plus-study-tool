@@ -78,7 +78,8 @@ Questions are split into foundation / intermediate / advanced. A lab is listed u
 
 - Lessons for every objective, each with key terms, diagrams, worked examples, quick checks, side-by-side comparisons and takeaways.
 - Practice mode with explanations for every option, smart practice, endless drills, “try a similar question”, a topic picker and keyboard shortcuts.
-- Flashcards for lesson key terms and exam acronyms, with term and acronym quizzes, on a spaced-repetition schedule, plus spaced review of missed questions.
+- Flashcards for lesson key terms and exam acronyms, with term and acronym quizzes.
+- Spaced repetition for every question and flashcard (Again, Hard, Good, Easy), a daily review, an optional exam date that caps intervals, and a Memory view with a 14-day forecast.
 - Timed mock exams with flagging, a review screen and results by domain, kept separate from a readiness estimate that is never presented as a score prediction.
 - Hands-on labs with partial credit: firewall rules, permissions, log analysis, network placement, ordering, Wi-Fi settings, risk calculations and a simulated terminal.
 - Progress by domain and objective, a daily goal, a streak, an activity map, and export/import.

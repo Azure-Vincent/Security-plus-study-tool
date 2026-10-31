@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/content.test.js tests/grading.test.js tests/store.test.js tests/practice.test.js && node scripts/roadmap.js --check",
+    "test": "node --test tests/content.test.js tests/grading.test.js tests/store.test.js tests/practice.test.js tests/srs.test.js && node scripts/roadmap.js --check",
     "test:e2e": "node --test tests/e2e.test.js",
     "test:all": "npm test && npm run test:e2e",
     "build:exe": "node scripts/build-exe.js",

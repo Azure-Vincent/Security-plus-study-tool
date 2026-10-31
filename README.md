@@ -1,6 +1,6 @@
 # Security+ Study Lab
 
-A calm, focused study app for **CompTIA Security+ SY0-701**. It teaches each exam objective from the ground up, then gives you plenty of ways to practice: smart practice sets, endless drills, flashcards, term quizzes, hands-on labs (PBQs), timed mock exams and spaced review.
+A calm, focused study app for **CompTIA Security+ SY0-701**. It teaches each exam objective from the ground up, then gives you plenty of ways to practice: smart practice sets, endless drills, flashcards, term quizzes, hands-on labs (PBQs), timed mock exams and spaced repetition that keeps bringing material back until it is in long-term memory.
 
 Everything runs locally. You don't need an account, a backend or a paid AI API.
 
@@ -74,13 +74,13 @@ Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.se
 - **Four destinations:** Today, Learn, Practice and Progress, in a side rail on desktop and a bottom tab bar on phones.
 - **Focus mode:** practice sessions, flashcards and exams hide all navigation and show a progress track.
 - **Keyboard first:** choose answers with `1`–`5` or `A`–`E`, press `Enter` to check and continue, `Space` to flip a flashcard, `1`/`2` to grade it, and `F` to flag an exam item.
-- **Today page:** a daily goal ring and streak, one-click **Practice now**, review and flashcards due, where to continue reading, and your weakest objectives with direct Practice buttons.
+- **Today page:** a daily goal ring and streak, a one-click **Daily review** when questions or flashcards are due (otherwise **Practice now**), an optional exam countdown, what is coming up, where to continue reading, and your weakest objectives with direct Practice buttons.
 
 ### Ways to practice
 - **Smart practice** (5, 10, 20 or 40 questions) mixes questions due for review, your weakest objectives, term quizzes and new questions weighted by domain.
 - **Endless drill** keeps serving questions until you stop, on all topics, your focus areas, or any lesson.
 - **Try a similar question** after a miss adds a fresh question on the same objective right away.
-- **Flashcards:** key terms from the lessons plus an **acronym deck**, scheduled with spaced repetition. **Quizzes:** generated “which term matches this description?” and “what does this acronym stand for?” questions with every option explained.
+- **Flashcards:** key terms from the lessons plus an **acronym deck**, graded **Again / Hard / Good / Easy** (keys 1–4); each button shows when you will see the card again. **Quizzes:** generated “which term matches this description?” and “what does this acronym stand for?” questions with every option explained.
 - **Topic picker** by domain or objective with length (including endless), difficulty, and term-quiz options.
 - Every lesson ends with practice, drill and flashcard buttons for that objective.
 
@@ -93,7 +93,7 @@ Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.se
 
 ### Questions and exams
 - **371 original questions** covering all 28 objectives (12 or more each, with at least two scenario-based and three advanced questions per objective): single-answer, multiple-response (“Select TWO”) and scenario-based, at three difficulty levels.
-- **Retry missed** questions and **spaced review** of everything you got wrong.
+- **Retry missed** questions, and a **daily review** of every question and flashcard that is due.
 - **Practice mode** gives immediate feedback: why the best answer is best, and why each other option is right or wrong.
 - **Timed mock exams**: a full-length mock (4 PBQs + 76 questions, 90 min), a quick mock (1 PBQ + 24 questions, 30 min) and domain-focused exams. Exam mode withholds feedback until you submit, supports **flag for review**, has a navigator and a review screen, auto-submits when time runs out, and survives page reloads.
 
@@ -130,7 +130,13 @@ Drag-and-drop works with a mouse, touch (select an item, then tap “Place here�
 - Tracks accuracy by **domain and objective**, recent accuracy, and PBQ results. Mastery blends recent questions (75%) with PBQ scores (25%).
 - A **daily goal** (10, 20, 30 or 50 questions and cards), a **streak**, and a 16-week **activity map**.
 - **Focus areas** on the Today page link straight to the matching lesson and practice.
-- **Spaced review** uses a Leitner schedule (due now → 1 → 3 → 7 → 16 → 35 days). Review sessions mix in **fresh, unseen questions** on the same objectives, so you practice the concept rather than memorizing answers.
+- **Spaced repetition** (an SM-2 style scheduler in `js/srs.js`) covers every question and flashcard you study:
+  - A miss or **Again** brings the item back in about 10 minutes. **Good** brings it back in 1 day, then 3, then about 8, and the gap keeps growing with each success. **Easy** jumps further; **Hard** grows more slowly.
+  - After a correct answer you can mark it **I guessed** (`G`, treated as a miss) or **Too easy** (`E`). The feedback always says when the question returns.
+  - Settings let you choose **Everything** (the default) or **Mistakes only**, and set an **exam date**: no review is scheduled past the day before it.
+  - The **daily review** runs due questions first, mixed with a few fresh questions on objectives you recently missed (so you practice the concept, not the answer), then offers the due flashcards.
+  - The **Memory** section on Progress shows learning, short-term and long-term (21+ day) items, how much of each domain you currently remember, and a 14-day forecast.
+  - Progress saved by earlier versions (the old box schedule) is converted automatically.
 - Progress is **saved automatically** in `localStorage`. Use Export/Import (JSON) to move it between browsers.
 - **Practice performance and the readiness estimate are kept separate.** The readiness indicator is labeled as an estimate, is not converted to CompTIA’s 100–900 scale, and is never presented as a pass/fail prediction.
 
@@ -144,9 +150,9 @@ npm run test:e2e     # end-to-end learning flow in headless Chromium
 E2E_BASE_URL=http://127.0.0.1:47801/ npm run test:e2e   # same flow against a running desktop build
 ```
 
-The unit tests check that every objective has a complete lesson, that the question bank is well formed (option explanations, multiple-response counts, coverage per objective and difficulty), and that every PBQ’s reference solution scores 100% while its starting state does not. They also cover firewall first-match and implicit-deny behavior, partial credit, alternative valid answers, the simulated shell, spaced-review intervals, recommendations and export/import.
+The unit tests check that every objective has a complete lesson, that the question bank is well formed (option explanations, multiple-response counts, coverage per objective and difficulty), and that every PBQ’s reference solution scores 100% while its starting state does not. They also cover firewall first-match and implicit-deny behavior, partial credit, alternative valid answers, the simulated shell, the spaced-repetition scheduler (intervals, grades, exam-date cap, migration), recommendations and export/import.
 
-The end-to-end test covers the full flow: Today → lesson and quick check → keyboard-only practice from the lesson → persistence and the daily goal → spaced review → similar question and endless drill → flashcards → topic picker → labs (firewall, click-to-place and drag-and-drop, ordering, terminal) → timed mock exam with flagging → results → progress → settings → phone layout with no horizontal scrolling. Point it at a desktop build with `E2E_BASE_URL` to test the AppImage or Windows launcher the same way.
+The end-to-end test covers the full flow: Today → lesson and quick check → keyboard-only practice from the lesson → persistence and the daily goal → scheduling feedback and “I guessed” → daily review once items fall due → similar question and endless drill → flashcards → topic picker → labs (firewall, click-to-place and drag-and-drop, ordering, terminal) → timed mock exam with flagging → results → progress → settings (including spaced-repetition mode and exam date) → phone layout with no horizontal scrolling. Point it at a desktop build with `E2E_BASE_URL` to test the AppImage or Windows launcher the same way.
 
 ## Project structure
 
@@ -161,7 +167,8 @@ js/content/questions-*.js  Question bank
 js/content/pbqs.js         PBQ scenarios, reference solutions and walkthroughs
 js/practice-gen.js         Flashcards and term quizzes generated from lesson key terms
 js/grading.js              Pure grading logic and the simulated shell (shared with tests)
-js/store.js                Progress, spaced review, flashcards, daily goal, streak, analytics
+js/srs.js                  Spaced-repetition scheduler (pure functions, unit tested)
+js/store.js                Progress, review queues, flashcards, daily goal, streak, analytics
 js/pbq-ui.js               Interactive PBQ components
 js/app.js                  Router and views (Today, Learn, Practice, sessions, flashcards, exams, labs, Progress)
 server.js                  Zero-dependency static server

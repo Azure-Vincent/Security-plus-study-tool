@@ -1,11 +1,10 @@
-/* Persistent progress (localStorage) + spaced review + analytics. */
+/* Persistent progress (localStorage) + spaced repetition (js/srs.js) + analytics. */
 (function () {
   'use strict';
   var KEY = 'secplus.progress.v1';
   var DAY = 86400000;
-  // Leitner intervals by box (box 0 = due immediately after a miss).
+  // Intervals of the earlier box-based schedule, kept to convert old saves.
   var INTERVALS = [0, 1 * DAY, 3 * DAY, 7 * DAY, 16 * DAY, 35 * DAY];
-  var GRADUATED = 5;
 
   function blank() {
     return { v: 1, created: Date.now(), q: {}, obj: {}, pbq: {}, lessons: {}, exams: [], settings: {}, activeExam: null, practice: null, lastResult: null, daily: {}, cards: {} };
@@ -14,11 +13,25 @@
   function load() {
     try {
       var raw = window.localStorage.getItem(KEY);
-      if (raw) { var d = Object.assign(blank(), JSON.parse(raw)); d.daily = d.daily || {}; d.cards = d.cards || {}; return d; }
+      if (raw) return migrate(Object.assign(blank(), JSON.parse(raw)));
     } catch (e) { memoryOnly = true; }
     return blank();
   }
+  // Older saves used a box schedule; give every studied item a spaced-repetition state.
+  function migrate(d) {
+    d.daily = d.daily || {}; d.cards = d.cards || {};
+    [d.q, d.cards].forEach(function (bucket) {
+      Object.keys(bucket).forEach(function (id) { var r = bucket[id]; if (!r.srs) r.srs = SRS.fromLegacy(r, INTERVALS); });
+    });
+    return d;
+  }
   var data = load();
+  function srsOpts() {
+    var ex = data.settings.examDate ? Date.parse(data.settings.examDate + 'T09:00:00') : 0;
+    return { examDate: ex && !isNaN(ex) ? ex : 0 };
+  }
+  // Which items come up for review: everything studied (default) or only items you have missed.
+  function inReview(r) { return r.srs && (Store.srsMode() === 'all' || r.srs.lapses > 0 || r.last === false); }
 
   var Store = {
     get data() { return data; },
@@ -31,20 +44,19 @@
     importJSON: function (txt) {
       var d = JSON.parse(txt);
       if (!d || d.v !== 1 || typeof d.q !== 'object') throw new Error('This file is not a Security+ Study Lab progress export.');
-      data = Object.assign(blank(), d); Store.save();
+      data = migrate(Object.assign(blank(), d)); Store.save();
     },
 
-    /* Record one answered question. mode: 'practice' | 'review' | 'exam' */
-    recordAnswer: function (q, correct, mode) {
+    /* Record one answered question. mode: 'practice' | 'review' | 'exam'.
+       grade (optional) is the spaced-repetition grade; by default a correct answer is Good (2) and a miss is Again (0). */
+    recordAnswer: function (q, correct, mode, grade) {
       var now = Date.now();
       var r = data.q[q.id] || (data.q[q.id] = { n: 0, c: 0 });
       r.n++; if (correct) r.c++;
       r.last = correct; r.t = now;
-      if (!correct) { r.box = 0; r.due = now; r.missed = (r.missed || 0) + 1; }
-      else if (r.box !== undefined) {
-        r.box = Math.min(GRADUATED, r.box + 1);
-        r.due = now + (INTERVALS[r.box] || INTERVALS[INTERVALS.length - 1]);
-      }
+      if (!correct) r.missed = (r.missed || 0) + 1;
+      r.prevSrs = r.srs || null;
+      r.srs = SRS.schedule(r.srs, grade !== undefined ? grade : (correct ? 2 : 0), now, srsOpts());
       var o = data.obj[q.obj] || (data.obj[q.obj] = { n: 0, c: 0, recent: [] });
       o.n++; if (correct) o.c++;
       o.recent.push(correct ? 1 : 0);
@@ -74,25 +86,39 @@
       Store.save();
     },
 
-    /* ---------- Flashcards (same Leitner schedule as questions) ---------- */
-    recordCard: function (cardId, knew) {
+    // Change the grade of the most recent answer (for "I guessed" or "Too easy"), returning the new state.
+    regrade: function (qid, grade) {
+      var r = data.q[qid];
+      if (!r) return null;
+      r.srs = SRS.schedule(r.prevSrs, grade, r.t || Date.now(), srsOpts());
+      Store.save();
+      return r.srs;
+    },
+
+    /* ---------- Flashcards (same scheduler as questions) ---------- */
+    // grade: 0 Again, 1 Hard, 2 Good, 3 Easy (true/false are accepted as Good/Again).
+    recordCard: function (cardId, grade) {
+      if (grade === true) grade = 2; else if (grade === false) grade = 0;
       var now = Date.now();
-      var r = data.cards[cardId] || (data.cards[cardId] = { n: 0, k: 0, box: 0 });
+      var r = data.cards[cardId] || (data.cards[cardId] = { n: 0, k: 0 });
       r.n++; r.t = now;
-      if (knew) { r.k++; r.box = Math.min(GRADUATED, r.box + 1); r.due = now + INTERVALS[r.box]; }
-      else { r.box = 0; r.due = now; }
+      if (grade > 0) r.k++;
+      r.srs = SRS.schedule(r.srs, grade, now, srsOpts());
       bump('cards');
       Store.save();
+      return r.srs;
     },
+    cardPreview: function (cardId, now) { var r = data.cards[cardId]; return SRS.preview(r && r.srs, now || Date.now(), srsOpts()); },
     // Cards to study now: due cards first, then cards never seen. `ids` limits the scope.
     cardQueue: function (ids, limit, now) {
       now = now || Date.now();
-      var due = ids.filter(function (id) { var r = data.cards[id]; return r && r.box < GRADUATED && r.due <= now; });
-      due.sort(function (a, b) { return data.cards[a].due - data.cards[b].due; });
+      var due = ids.filter(function (id) { var r = data.cards[id]; return r && r.srs && r.srs.due <= now; });
+      due.sort(function (a, b) { return data.cards[a].srs.due - data.cards[b].srs.due; });
       var fresh = ids.filter(function (id) { return !data.cards[id]; });
       return { due: due, fresh: fresh, queue: due.concat(fresh).slice(0, limit || 20) };
     },
-    cardsLearned: function () { return Object.keys(data.cards).filter(function (id) { return data.cards[id].box >= 1; }).length; },
+    // Cards you recalled at your last review (not currently forgotten).
+    cardsLearned: function () { return Object.keys(data.cards).filter(function (id) { var s = data.cards[id].srs; return s && s.ivl >= 1; }).length; },
 
     /* ---------- Daily activity, goal and streak ---------- */
     today: function () { return data.daily[dayKey(Date.now())] || {}; },
@@ -113,18 +139,48 @@
       return out;
     },
 
-    /* ---------- Spaced review ---------- */
+    /* ---------- Spaced repetition ---------- */
+    srsMode: function () { return data.settings.srs === 'missed' ? 'missed' : 'all'; },
+    examDate: function () { return srsOpts().examDate || null; },
+    daysToExam: function () { var e = Store.examDate(); return e ? Math.ceil((e - Date.now()) / DAY) : null; },
     dueReview: function (now) {
       now = now || Date.now();
-      return Object.keys(data.q).filter(function (id) {
-        var r = data.q[id];
-        return r.box !== undefined && r.box < GRADUATED && r.due <= now;
-      }).sort(function (a, b) { return data.q[a].due - data.q[b].due; });
+      return Object.keys(data.q).filter(function (id) { var r = data.q[id]; return inReview(r) && r.srs.due <= now; })
+        .sort(function (a, b) { return data.q[a].srs.due - data.q[b].srs.due; });
+    },
+    dueCards: function (now) {
+      now = now || Date.now();
+      return Object.keys(data.cards).filter(function (id) { var r = data.cards[id]; return r.srs && r.srs.due <= now; })
+        .sort(function (a, b) { return data.cards[a].srs.due - data.cards[b].srs.due; });
     },
     nextReviewTime: function () {
       var t = Infinity;
-      Object.keys(data.q).forEach(function (id) { var r = data.q[id]; if (r.box !== undefined && r.box < GRADUATED) t = Math.min(t, r.due); });
+      Object.keys(data.q).forEach(function (id) { var r = data.q[id]; if (inReview(r)) t = Math.min(t, r.srs.due); });
+      Object.keys(data.cards).forEach(function (id) { var r = data.cards[id]; if (r.srs) t = Math.min(t, r.srs.due); });
       return t;
+    },
+    // Reviews due on each of the next `days` days (day 0 includes anything overdue).
+    forecast: function (days, now) {
+      now = now || Date.now();
+      var start = new Date(now); start.setHours(0, 0, 0, 0);
+      var out = [];
+      for (var i = 0; i < days; i++) out.push({ day: dayKey(start.getTime() + i * DAY), q: 0, cards: 0 });
+      function place(due, kind) {
+        var i = due <= now ? 0 : Math.floor((due - start.getTime()) / DAY);
+        if (i >= 0 && i < days) out[i][kind]++;
+      }
+      Object.keys(data.q).forEach(function (id) { var r = data.q[id]; if (inReview(r)) place(r.srs.due, 'q'); });
+      Object.keys(data.cards).forEach(function (id) { var r = data.cards[id]; if (r.srs) place(r.srs.due, 'cards'); });
+      return out;
+    },
+    /* Memory stages for a set of items: new (never studied), learning (just forgotten),
+       young (interval under 21 days) and mature (21 days or more, counted as long-term memory). */
+    memory: function (qids, cardIds) {
+      var m = { new: 0, learning: 0, young: 0, mature: 0, total: 0 };
+      function add(r) { m[SRS.stage(r && r.srs)]++; m.total++; }
+      (qids || []).forEach(function (id) { add(data.q[id]); });
+      (cardIds || []).forEach(function (id) { add(data.cards[id]); });
+      return m;
     },
     missedIds: function () {
       return Object.keys(data.q).filter(function (id) { return data.q[id].last === false; });
@@ -201,6 +257,5 @@
   }
   Store.dayKey = dayKey;
   Store.INTERVALS = INTERVALS;
-  Store.GRADUATED = GRADUATED;
   window.Store = Store;
 })();

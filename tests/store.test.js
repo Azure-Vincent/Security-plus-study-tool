@@ -13,20 +13,75 @@ test('answers persist to storage and reload', () => {
   assert.equal(saved.obj[q.obj].n, 1);
 });
 
-test('spaced review: misses are due now, then intervals grow until retired', () => {
+test('spaced repetition: misses return in minutes, correct answers come back later and later', () => {
   const { SEC, Store } = load();
+  const DAY = 86400000;
   const q = SEC.questions[5];
   Store.recordAnswer(q, false, 'practice');
-  same(Store.dueReview(), [q.id]);
+  same(Store.dueReview(), [], 'a miss is not due in the same minute');
+  same(Store.dueReview(Date.now() + 11 * 60000), [q.id], 'a miss returns after about 10 minutes');
   Store.recordAnswer(q, true, 'review');
-  assert.equal(Store.data.q[q.id].box, 1);
-  same(Store.dueReview(), [], 'not due again until tomorrow');
-  same(Store.dueReview(Date.now() + 86400000 + 1000), [q.id]);
-  for (let i = 0; i < 4; i++) Store.recordAnswer(q, true, 'review');
-  assert.equal(Store.data.q[q.id].box, Store.GRADUATED);
-  same(Store.dueReview(Date.now() + 400 * 86400000), [], 'retired items leave the queue');
+  assert.equal(Store.data.q[q.id].srs.ivl, 1);
+  same(Store.dueReview(Date.now() + DAY / 2), [], 'not due again until tomorrow');
+  same(Store.dueReview(Date.now() + DAY + 1000), [q.id]);
+  let last = 1;
+  for (let i = 0; i < 4; i++) {
+    Store.recordAnswer(q, true, 'review');
+    const ivl = Store.data.q[q.id].srs.ivl;
+    assert.ok(ivl > last, 'interval grows: ' + last + ' -> ' + ivl);
+    last = ivl;
+  }
+  assert.ok(last >= 21, 'four more correct reviews reach long-term memory');
+  assert.equal(Store.memory([q.id]).mature, 1);
   Store.recordAnswer(q, false, 'practice');
-  assert.equal(Store.data.q[q.id].box, 0, 'a new miss restarts the schedule');
+  assert.equal(Store.data.q[q.id].srs.ivl, 0, 'a new miss restarts the schedule');
+  assert.equal(Store.memory([q.id]).learning, 1);
+});
+
+test('spaced repetition: every answered question is scheduled, unless set to mistakes only', () => {
+  const { SEC, Store } = load();
+  const DAY = 86400000;
+  const [a, b] = SEC.questions;
+  Store.recordAnswer(a, true, 'practice');
+  Store.recordAnswer(b, false, 'practice');
+  same(Store.dueReview(Date.now() + DAY + 1000).sort(), [a.id, b.id].sort());
+  Store.data.settings.srs = 'missed';
+  same(Store.dueReview(Date.now() + DAY + 1000), [b.id], 'mistakes-only mode leaves correct first answers alone');
+  const fc = Store.forecast(14, Date.now() + 60 * 60000);
+  assert.equal(fc.length, 14);
+  assert.equal(fc.reduce((n, f) => n + f.q, 0), 1);
+});
+
+test('spaced repetition: grading a guess or an easy answer changes the next interval', () => {
+  const { SEC, Store } = load();
+  const q = SEC.questions[9];
+  Store.recordAnswer(q, true, 'practice');
+  assert.equal(Store.data.q[q.id].srs.ivl, 1);
+  Store.regrade(q.id, 3);
+  assert.equal(Store.data.q[q.id].srs.ivl, 4, 'too easy jumps ahead');
+  Store.regrade(q.id, 0);
+  assert.equal(Store.data.q[q.id].srs.ivl, 0, 'a guess is treated as a miss');
+  Store.regrade(q.id, 2);
+  assert.equal(Store.data.q[q.id].srs.ivl, 1, 'regrading starts from the state before the answer');
+});
+
+test('spaced repetition: no review is scheduled past the exam date', () => {
+  const { SEC, Store } = load();
+  const d = new Date(Date.now() + 10 * 86400000);
+  Store.data.settings.examDate = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  assert.ok(Store.daysToExam() >= 10 && Store.daysToExam() <= 11);
+  const q = SEC.questions[3];
+  for (let i = 0; i < 6; i++) Store.recordAnswer(q, true, 'review', 3);
+  assert.ok(Store.data.q[q.id].srs.due < Store.examDate(), 'due before the exam');
+});
+
+test('progress saved by the earlier box schedule is migrated', () => {
+  const { SEC, Store } = load();
+  const q = SEC.questions[2];
+  Store.importJSON(JSON.stringify({ v: 1, q: { [q.id]: { n: 2, c: 1, last: true, t: Date.now(), box: 3, due: Date.now() + 7 * 86400000 } }, cards: { 'card-1.1-1': { box: 1, due: Date.now() + 86400000 } }, obj: {}, pbq: {}, lessons: {}, exams: [], settings: {} }));
+  assert.equal(Store.data.q[q.id].srs.ivl, 7);
+  assert.equal(Store.data.cards['card-1.1-1'].srs.ivl, 1);
+  assert.equal(Store.cardsLearned(), 1);
 });
 
 test('objective status, weak-area recommendations and PBQ blending', () => {
