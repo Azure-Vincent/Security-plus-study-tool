@@ -44,4 +44,38 @@
       ex: t.term + ': ' + t.def + ' This term is introduced in lesson ' + t.obj + '.'
     });
   });
+
+  /* Acronym deck. Every acronym gets a "What does … stand for?" quiz with distractors from the same domain.
+     Acronyms that are not already a lesson key term also get their own flashcard; lesson cards that are
+     acronyms are tagged so the "Acronyms only" deck includes them too. */
+  var taught = {};
+  terms.forEach(function (t) {
+    t.term.split('/').forEach(function (part) { taught[part.trim().toLowerCase()] = t; });
+  });
+  var all = (SEC.acronyms || []).filter(function (a) { return SEC.objById(a[2]); }).map(function (a) {
+    var slug = a[0].toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    var lessonCard = taught[a[0].toLowerCase()];
+    if (lessonCard) lessonCard.acronym = true;
+    return { id: lessonCard ? lessonCard.id : 'acr-' + slug, slug: slug, obj: a[2], term: a[0], def: a[1] + '. ' + a[3], kind: 'acronym', expansion: a[1], desc: a[3], isNew: !lessonCard };
+  });
+  all.forEach(function (c, k) {
+    var pool = all.filter(function (x) { return x !== c && x.obj[0] === c.obj[0] && x.expansion !== c.expansion; });
+    if (pool.length < 3) pool = all.filter(function (x) { return x !== c && x.expansion !== c.expansion; });
+    var ds = [];
+    for (var i = 0; ds.length < 3 && i < pool.length; i++) {
+      var d = pool[(i * 5 + k) % pool.length];
+      if (ds.indexOf(d) < 0) ds.push(d);
+    }
+    SEC.termQuestions.push({
+      id: 'acronym-' + c.slug, obj: c.obj, type: 'mc', d: 1, gen: true, acr: true, card: c.id,
+      q: 'What does ' + c.term + ' stand for?',
+      o: [[c.expansion, c.term + ' stands for ' + c.expansion + '. ' + c.desc, true]].concat(ds.map(function (d) {
+        return [d.expansion, 'That is ' + d.term + ': ' + d.desc];
+      })),
+      ex: c.term + ' stands for ' + c.expansion + '. ' + c.desc
+    });
+  });
+  SEC.terms = terms.concat(all.filter(function (c) { return c.isNew; }).map(function (c) {
+    return { id: c.id, obj: c.obj, term: c.term, def: c.def, kind: 'acronym', acronym: true };
+  }));
 })();

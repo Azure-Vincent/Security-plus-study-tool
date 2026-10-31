@@ -43,9 +43,11 @@ function handler(req, res) {
     // Only the app's own pages may send these; a cross-site page would carry a different Origin.
     if (hosts.map((h) => 'http://' + h).indexOf(req.headers.origin) < 0) { plain(res, 403, 'Forbidden'); return; }
     if (rel === '__secplus_quit') { plain(res, 200, 'bye'); console.log('Quit from the app. Goodbye.'); setTimeout(() => process.exit(0), 200); return; }
+    lastPing = Date.now(); sawPage = true;
     plain(res, 200, 'ok'); return;
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') { plain(res, 405, 'Method not allowed'); return; }
+  if (rel === '') { lastPing = Date.now(); sawPage = true; }
   if (rel === '') rel = 'index.html';
   if (rel.split('/').includes('..')) { res.writeHead(403); res.end('Forbidden'); return; }
   const data = readAsset(rel);
@@ -54,8 +56,32 @@ function handler(req, res) {
   res.end(data);
 }
 
-function openBrowser(url) {
-  if (NO_BROWSER) return;
+// Heartbeat bookkeeping, used when the app runs in the default browser (no window to watch).
+const HEARTBEAT_TIMEOUT = 10 * 60 * 1000; // stop after 10 minutes without an open app page
+const FIRST_CONTACT_TIMEOUT = 5 * 60 * 1000;
+const QUICK_EXIT = 5000; // a browser that exits this fast handed the window to an already-running instance
+const started = Date.now();
+let lastPing = 0;
+let sawPage = false;
+
+// Chromium-based browsers that support --app windows, in order of preference.
+function appBrowser() {
+  if (process.env.SECPLUS_BROWSER) return process.env.SECPLUS_BROWSER;
+  if (process.platform !== 'win32') return null;
+  const roots = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
+  const rel = ['Microsoft\\Edge\\Application\\msedge.exe', 'Google\\Chrome\\Application\\chrome.exe', 'BraveSoftware\\Brave-Browser\\Application\\brave.exe'];
+  for (const r of rel) for (const root of roots) { const p = path.join(root, r); if (fs.existsSync(p)) return p; }
+  return null;
+}
+
+function profileDir() {
+  const base = process.platform === 'win32' ? (process.env.LOCALAPPDATA || require('os').homedir()) : path.join(require('os').homedir(), '.local', 'share');
+  const dir = path.join(base, process.platform === 'win32' ? 'SecurityPlusStudyLab' : 'security-plus-study-lab', 'Browser');
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function openDefaultBrowser(url) {
   const cmd = process.platform === 'win32' ? ['explorer.exe', [url]] : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
   try {
     const child = spawn(cmd[0], cmd[1], { detached: true, stdio: 'ignore', windowsHide: true });
@@ -64,6 +90,40 @@ function openBrowser(url) {
   } catch (e) {
     console.log('Open this address in your browser: ' + url);
   }
+}
+
+function watchHeartbeat() {
+  setInterval(() => {
+    const now = Date.now();
+    if (sawPage && now - lastPing > HEARTBEAT_TIMEOUT) { console.log('No open app page for 10 minutes. Goodbye.'); process.exit(0); }
+    if (!sawPage && now - started > FIRST_CONTACT_TIMEOUT) { console.log('The app page was never opened. Goodbye.'); process.exit(0); }
+  }, 5000);
+}
+
+// Opens the app in its own window (Edge, Chrome or Brave with a dedicated profile) and exits when that
+// window closes. Falls back to the default browser, where the app stops after its page has been closed a while.
+function openBrowser(url, alreadyRunning) {
+  if (NO_BROWSER) return;
+  const exe = appBrowser();
+  if (exe) {
+    const args = ['--app=' + url, '--user-data-dir=' + profileDir(), '--no-first-run', '--no-default-browser-check'];
+    const t0 = Date.now();
+    let child;
+    try { child = spawn(exe, args, { stdio: 'ignore', windowsHide: false }); } catch (e) { child = null; }
+    if (child) {
+      console.log('Opening Security+ Study Lab in its own window.');
+      child.on('error', () => { openDefaultBrowser(url); if (!alreadyRunning) watchHeartbeat(); });
+      child.on('exit', () => {
+        if (alreadyRunning) return;
+        if (Date.now() - t0 <= QUICK_EXIT) { watchHeartbeat(); return; }
+        console.log('The app window was closed. Goodbye.');
+        process.exit(0);
+      });
+      return;
+    }
+  }
+  openDefaultBrowser(url);
+  if (!alreadyRunning) watchHeartbeat();
 }
 
 // Is an instance of this app already serving on the port?
@@ -95,15 +155,15 @@ async function main() {
       activePort = port;
       await listen(port);
       console.log('Security+ Study Lab is running at ' + url);
-      console.log('Your progress is saved in your browser for this address.');
-      console.log('Keep this window open while you study. To stop, close it or choose Settings, then Quit, in the app.');
-      openBrowser(url);
+      console.log('Keep this window open while you study. The app stops when you close its window,');
+      console.log('or when you choose Settings, then Quit, in the app.');
+      openBrowser(url, false);
       return;
     } catch (err) {
       if (err.code !== 'EADDRINUSE') throw err;
       if (await isOurs(port)) {
         console.log('Security+ Study Lab is already running at ' + url + ' - opening it.');
-        openBrowser(url);
+        openBrowser(url, true);
         setTimeout(() => process.exit(0), 1500);
         return;
       }

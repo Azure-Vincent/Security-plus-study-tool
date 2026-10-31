@@ -195,6 +195,34 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
       assert.ok(pct >= 40 && pct < 100);
     });
 
+    await t.test('Every lab opens, grades, and shows a step-by-step solution', async () => {
+      const ids = await page.evaluate(() => SEC.pbqs.map((p) => p.id));
+      assert.ok(ids.length >= 21);
+      for (const id of ids) {
+        await page.goto(base + '#/pbq/' + id);
+        await page.waitForSelector('#submitPBQ');
+        await page.click('#submitPBQ');
+        await page.waitForSelector('.pbq-score');
+        assert.ok(await page.locator('.solution li').count() >= 2, `${id} shows a solution`);
+        await page.click('[data-showsol]');
+      }
+    });
+
+    await t.test('Acronym deck and acronym quizzes', async () => {
+      await page.goto(base + '#/practice');
+      await page.click('[data-cards="acronyms"]');
+      await page.waitForSelector('#card');
+      assert.match(await text('.sbar .title'), /Acronyms/);
+      const isAcronym = await page.evaluate(() => { const id = Store.data.flash.ids[0]; return SEC.terms.find((t) => t.id === id).acronym === true; });
+      assert.ok(isAcronym, 'deck contains acronym cards');
+      // An acronym quiz renders as a normal practice question with its own tag.
+      await page.evaluate(() => { const q = SEC.termQuestions.find((x) => x.acr); Store.data.practice = { id: 1, mode: 'practice', title: 'Acronym check', qids: [q.id], idx: 0, answers: {}, orders: { [q.id]: [0, 1, 2, 3] }, back: '#/practice', endless: false, pool: 'all', done: false }; Store.save(); });
+      await page.goto(base + '#/session');
+      await page.waitForSelector('.opt');
+      assert.match(await text('.qmeta'), /Acronym quiz/);
+      assert.match(await text('.qtext'), /^What does .+ stand for\?/);
+    });
+
     await t.test('Timed mock exam: no feedback, flagging, review screen, results with disclaimer', async () => {
       await page.goto(base + '#/practice');
       await page.click('button[data-exam="quick"]');

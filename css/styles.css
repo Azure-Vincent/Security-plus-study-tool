@@ -488,8 +488,10 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .field > label:not(.check), .field legend { font-weight: 600; }
 .field select, .field input[type="text"] { width: 100%; max-width: 36rem; }
 .field.ok { background: var(--good-soft); } .field.bad { background: var(--bad-soft); }
-.cfg-group { border: 1px solid var(--line); border-radius: 12px; padding: .5rem 1rem 1rem; margin: 0 0 1rem; background: var(--surface); }
-.cfg-group legend { font-weight: 700; padding: 0 .4rem; }
+.cfg-group { border: 1px solid var(--line); border-radius: 12px; padding: 0 1rem 1rem; margin: 0 0 1rem; background: var(--surface); }
+/* The title floats inside the box so long titles wrap cleanly instead of cutting through the border. */
+.cfg-group legend { float: left; width: 100%; font-weight: 700; padding: .7rem 0 .2rem; }
+.cfg-group > :not(legend) { clear: both; }
 .terminal { background: var(--term-bg); color: var(--term-ink); border-radius: 12px; padding: .9rem 1rem; font: .86rem/1.55 var(--mono); }
 .term-out { white-space: pre-wrap; word-break: break-word; max-height: 22rem; min-height: 9rem; overflow: auto; outline: none; }
 .term-in { display: flex; gap: .5rem; align-items: center; margin-top: .4rem; }

@@ -37,7 +37,8 @@ function build() {
   w(`| Objectives covered | ${SEC.objectives.length} of ${SEC.objectives.length}, across all ${SEC.domains.length} domains |`);
   w(`| Lessons | ${lessons.length}, with ${sum(lessons, (L) => L.sections.length)} sections, ${sum(lessons, (L) => L.sections.filter((s) => s.check).length)} quick checks and ${sum(lessons, (L) => L.sections.filter((s) => s.diagram).length)} diagrams |`);
   w(`| Exam-style questions | ${Q.length} original (${Q.filter((q) => q.d === 1).length} foundation, ${Q.filter((q) => q.d === 2).length} intermediate, ${Q.filter((q) => q.d === 3).length} advanced); ${Q.filter((q) => q.type === 'mr').length} multiple-response, ${Q.filter((q) => q.s).length} scenario-based |`);
-  w(`| Flashcards and term quizzes | ${SEC.terms.length} key-term flashcards and ${SEC.termQuestions.length} term quizzes built from the lessons |`);
+  const lessonCards = SEC.terms.filter((t) => !t.kind).length, acrCards = SEC.terms.filter((t) => t.acronym).length;
+  w(`| Flashcards and quizzes | ${SEC.terms.length} flashcards (${lessonCards} lesson key terms, plus acronyms; ${acrCards} cards in the acronym deck) and ${SEC.termQuestions.length} quizzes (${SEC.termQuestions.filter((q) => !q.acr).length} term, ${SEC.termQuestions.filter((q) => q.acr).length} acronym) |`);
   w(`| Hands-on labs (PBQs) | ${SEC.pbqs.length}, covering ${SEC.objectives.filter((o) => labsFor(o.id).length).length} of ${SEC.objectives.length} objectives |`);
   w('| Mock exams | Full length (4 labs and 76 questions, 90 minutes), quick (30 minutes) and one-domain (25 minutes) |');
   w('| Downloads | Linux AppImage, Windows .exe and macOS app, attached to each GitHub release |');
@@ -56,7 +57,7 @@ function build() {
       const L = SEC.lessons[o.id], qs = qFor(o.id), labs = labsFor(o.id);
       const lesson = `${L.title}: ${L.sections.length} sections, ${L.sections.filter((s) => s.check).length} checks, ${L.minutes} min`;
       const questions = `${qs.length} (${[1, 2, 3].map((n) => qs.filter((q) => q.d === n).length).join(' / ')})`;
-      const cards = `${cardsFor(o.id)} cards, ${termQFor(o.id)} quizzes`;
+      const cards = `${cardsFor(o.id)} cards, ${termQFor(o.id)} quizzes`; // includes acronyms taught in this objective
       w(`| **${o.id}** ${o.title.replace(/\.$/, '')} | ${lesson} | ${questions} | ${cards} | ${labs.length ? labs.map((p) => p.title).join('; ') : '–'} |`);
     });
   });
@@ -66,10 +67,11 @@ function build() {
   [
     'Lessons for every objective, each with key terms, diagrams, worked examples, quick checks, side-by-side comparisons and takeaways.',
     'Practice mode with explanations for every option, smart practice, endless drills, “try a similar question”, a topic picker and keyboard shortcuts.',
-    'Flashcards and term quizzes on a spaced-repetition schedule, plus spaced review of missed questions.',
+    'Flashcards for lesson key terms and exam acronyms, with term and acronym quizzes, on a spaced-repetition schedule, plus spaced review of missed questions.',
     'Timed mock exams with flagging, a review screen and results by domain, kept separate from a readiness estimate that is never presented as a score prediction.',
     'Hands-on labs with partial credit: firewall rules, permissions, log analysis, network placement, ordering, Wi-Fi settings, risk calculations and a simulated terminal.',
     'Progress by domain and objective, a daily goal, a streak, an activity map, and export/import.',
+    'Desktop downloads for Linux, Windows and macOS that open the app in its own window when a Chromium-based browser is installed.',
     'Light, dark and sepia themes, adjustable text size, a layout that works on phones, and offline use.',
   ].forEach((s) => w(`- ${s}`));
   w();
@@ -78,27 +80,29 @@ function build() {
   const noLab = SEC.objectives.filter((o) => !labsFor(o.id).length);
   const fewScen = SEC.objectives.filter((o) => qFor(o.id).filter((q) => q.s).length < 2);
   const fewAdv = SEC.objectives.filter((o) => qFor(o.id).filter((q) => q.d === 3).length < 3);
-  w(`- **Objectives without a hands-on lab (${noLab.length}):** ${noLab.map((o) => o.id).join(', ')}. Several are conceptual (governance, audits, threat actors) and suit question practice better, but some would benefit from a lab.`);
-  w(`- **Objectives with fewer than two scenario-based questions (${fewScen.length}):** ${fewScen.map((o) => o.id).join(', ')}.`);
-  w(`- **Objectives with fewer than three advanced questions (${fewAdv.length}):** ${fewAdv.map((o) => o.id).join(', ')}.`);
-  w('- **Acronyms:** lessons define the acronyms they use, but there is no full acronym deck matching CompTIA’s published acronym list.');
+  const list = (objs) => (objs.length ? objs.map((o) => o.id).join(', ') : 'none');
+  w(`- **Objectives without a hands-on lab (${noLab.length}):** ${list(noLab)}. Several are conceptual (governance, compliance, audits, awareness) and suit question practice better, but some would benefit from a lab.`);
+  w(`- **Objectives with fewer than two scenario-based questions:** ${list(fewScen)}.`);
+  w(`- **Objectives with fewer than three advanced questions:** ${list(fewAdv)}.`);
+  w(`- **Acronyms:** the deck covers ${SEC.acronyms.length} common Security+ acronyms. It has not been checked line by line against CompTIA’s official acronym list.`);
   w('- **Desktop apps:** the macOS app and the Windows .exe have not been tested on real Macs or Windows PCs yet, and neither is code-signed, so first launch shows a security prompt.');
-  w(`- **Next exam version:** the content targets ${e.code}. ${e.upcoming.code} is expected soon (see below), and its objectives are not covered separately.`);
+  w(`- **Next exam version:** the content targets ${e.code}. What is known about ${e.upcoming.code} so far is in [docs/${e.upcoming.code}.md](docs/${e.upcoming.code}.md); its new AI security objective is not covered yet.`);
   w();
   w('## Next steps');
   w();
   w(`### Now: prepare for ${e.upcoming.code}`);
   w();
-  w(`- Compare the final ${e.upcoming.code} objectives with these ${e.code} objectives once CompTIA publishes them, and list what is new, moved or removed.`);
+  w(`- Done: a first comparison from published reports (dates, domain weights, the new AI objective) in [docs/${e.upcoming.code}.md](docs/${e.upcoming.code}.md).`);
+  w(`- Confirm those details against CompTIA’s official ${e.upcoming.code} objectives, then map each objective to the ${e.code} lesson that covers it and list what is new, moved or removed.`);
+  w('- Add a lesson, questions and flashcards on AI security risks.');
   w(`- Add an exam-version note to each lesson that changes, so people still taking ${e.code} (until its retirement) are not confused.`);
-  w('- Confirm the release, launch and retirement dates on comptia.org and update `js/objectives.js`.');
   w();
-  w('### Next: close the gaps above');
+  w('### Next: close the remaining gaps');
   w();
-  w('- Add labs for objectives that lend themselves to hands-on work: vulnerability scan triage (4.3), SIEM alert tuning (4.4), automation playbook ordering (4.7), asset disposal choices (4.2) and resilience planning with RTO/RPO (3.4).');
-  w('- Write more scenario-based and advanced questions for the objectives listed above.');
-  w('- Add an acronym flashcard deck and term quizzes covering the full acronym list.');
-  w('- Test the macOS and Windows downloads on real machines, and open the Windows app in its own window like the Linux AppImage.');
+  w('- Done in this round: labs for 2.1, 3.4, 4.2, 4.3, 4.4, 4.7 and 5.3; scenario and advanced questions for every objective that lacked them; an acronym deck with quizzes; and an app window for the Windows download.');
+  if (noLab.length) w(`- Consider labs for the objectives that still have none (${list(noLab)}), where hands-on practice fits the topic.`);
+  w('- Check the acronym deck against CompTIA’s official acronym list.');
+  w('- Test the macOS and Windows downloads on real machines.');
   w();
   w('### Later');
   w();

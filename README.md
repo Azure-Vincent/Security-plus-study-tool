@@ -41,7 +41,7 @@ chmod +x Security_Plus_Study_Lab-x86_64.AppImage
 - Otherwise it opens in your default browser. Choose **Settings → Quit** to stop it, or it stops by itself 10 minutes after you close the tab.
 - If your system has no FUSE support, run it with `--appimage-extract-and-run`. Set `SECPLUS_BROWSER=firefox` (or any command) to choose the browser.
 
-**Windows.** Double-click `SecurityPlusStudyLab.exe`. It opens the app in your default browser and keeps a small console window open while you study. Close that window, or choose **Settings → Quit**, to stop. The file isn't code-signed, so SmartScreen may show "Windows protected your PC"; choose **More info → Run anyway**.
+**Windows.** Double-click `SecurityPlusStudyLab.exe`. It opens the app in its own Microsoft Edge (or Chrome or Brave) window, with a separate profile in `%LOCALAPPDATA%\SecurityPlusStudyLab\`, and stops when you close that window. A small console window stays open while it runs. If no such browser is found, it uses your default browser; choose **Settings → Quit** to stop it then. The file isn't code-signed, so SmartScreen may show "Windows protected your PC"; choose **More info → Run anyway**.
 
 **macOS.** Unzip the file and move **Security+ Study Lab** to your Applications folder (this keeps your progress in one place), then open it.
 
@@ -80,7 +80,7 @@ Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.se
 - **Smart practice** (5, 10, 20 or 40 questions) mixes questions due for review, your weakest objectives, term quizzes and new questions weighted by domain.
 - **Endless drill** keeps serving questions until you stop, on all topics, your focus areas, or any lesson.
 - **Try a similar question** after a miss adds a fresh question on the same objective right away.
-- **Flashcards:** 204 key terms from the lessons, scheduled with spaced repetition. **Term quizzes:** 200 generated “which term matches this description?” questions with every option explained.
+- **Flashcards:** key terms from the lessons plus an **acronym deck**, scheduled with spaced repetition. **Quizzes:** generated “which term matches this description?” and “what does this acronym stand for?” questions with every option explained.
 - **Topic picker** by domain or objective with length (including endless), difficulty, and term-quiz options.
 - Every lesson ends with practice, drill and flashcard buttons for that objective.
 
@@ -92,12 +92,12 @@ Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.se
 - Each lesson ends with **key takeaways** and a **Practice this topic** button that starts questions on that objective immediately, plus links to related PBQs.
 
 ### Questions and exams
-- **360 original questions** covering all 28 objectives (12 or more each): single-answer, multiple-response (“Select TWO”) and scenario-based, at three difficulty levels.
+- **371 original questions** covering all 28 objectives (12 or more each, with at least two scenario-based and three advanced questions per objective): single-answer, multiple-response (“Select TWO”) and scenario-based, at three difficulty levels.
 - **Retry missed** questions and **spaced review** of everything you got wrong.
 - **Practice mode** gives immediate feedback: why the best answer is best, and why each other option is right or wrong.
 - **Timed mock exams**: a full-length mock (4 PBQs + 76 questions, 90 min), a quick mock (1 PBQ + 24 questions, 30 min) and domain-focused exams. Exam mode withholds feedback until you submit, supports **flag for review**, has a navigator and a review screen, auto-submits when time runs out, and survives page reloads.
 
-### Performance-based questions (14)
+### Performance-based questions (21)
 | PBQ | Interface | Objectives |
 |---|---|---|
 | Configure the DMZ firewall | Editable ACL (add, reorder, delete rules) plus a packet tester | 4.5, 3.2 |
@@ -114,6 +114,13 @@ Any static host also works, such as GitHub Pages, Netlify or `python3 -m http.se
 | Match indicators to attack types | Drag and drop | 2.4 |
 | Choose the right cryptographic solution | Drag and drop | 1.4, 3.3 |
 | Quantitative risk analysis | Numeric calculations plus selects | 5.2 |
+| Prioritize vulnerability scan findings | Decisions per finding, using CVSS plus context | 4.3 |
+| Triage and tune the SIEM alert queue | Selectable alerts plus tuning questions | 4.4, 4.9 |
+| Build an automated phishing playbook | Ordering | 4.7, 4.8 |
+| Choose the right media sanitization | Drag and drop | 4.2 |
+| Plan recovery from a business impact analysis | RTO/RPO-driven settings | 3.4, 5.2 |
+| Match each situation to the right agreement | Drag and drop | 5.3 |
+| Identify the threat actor | Drag and drop | 2.1 |
 
 Grading gives **partial credit** and accepts **multiple valid solutions**. Firewall tasks are graded by simulating test traffic against your rules, so any correct rule set passes. Ordering tasks accept interchangeable steps, and some settings accept more than one correct value. After you submit, the app shows item-by-item feedback and a **step-by-step solution**, and can load a correct configuration into the simulator.
 

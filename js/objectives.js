@@ -15,7 +15,7 @@ SEC.exam = {
   questionTypes: 'Multiple-choice (single and multiple response) and performance-based',
   upcoming: {
     code: 'SY0-801',
-    note: 'CompTIA has announced the next version, SY0-801. Published reports put its English launch at about November 17, 2026 and SY0-701 English retirement at June 11, 2027. Dates can change, so check comptia.org before you book. This app teaches the SY0-701 objectives. Most of the material carries over, but if you plan to sit SY0-801, compare these objectives against its final objectives document.'
+    note: 'CompTIA has announced the next version, SY0-801. Published reports put its English launch at about November 17, 2026 and SY0-701 English retirement at June 11, 2027. Dates can change, so check comptia.org before you book. Reports also describe new domain weights (16, 24, 19, 27 and 14%) and a new objective on AI security risks. This app teaches the SY0-701 objectives. Most of the material carries over, but if you plan to sit SY0-801, compare these objectives against its final objectives document.'
   }
 };
 

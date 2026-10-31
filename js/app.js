@@ -118,12 +118,12 @@
   }
 
   /* ---------------- flashcards ---------------- */
-  function cardIds(objs) { return SEC.terms.filter(function (t) { return !objs || objs.indexOf(t.obj) >= 0; }).map(function (t) { return t.id; }); }
+  function cardIds(objs, kind) { return SEC.terms.filter(function (t) { return (!objs || objs.indexOf(t.obj) >= 0) && (!kind || (kind === 'acronym' ? t.acronym : (t.kind || 'term') === kind)); }).map(function (t) { return t.id; }); }
   function cardById(id) { return SEC.terms.find(function (t) { return t.id === id; }); }
-  function startCards(objs, title, back) {
-    var q = Store.cardQueue(cardIds(objs), 20);
+  function startCards(objs, title, back, kind) {
+    var q = Store.cardQueue(cardIds(objs, kind), 20);
     if (!q.queue.length) { toast('No cards left to study here today.'); return; }
-    Store.data.flash = { ids: q.queue.slice(), idx: 0, flipped: false, knew: 0, again: 0, seen: {}, title: title || 'Flashcards', objs: objs || null, back: back || '#/practice' };
+    Store.data.flash = { ids: q.queue.slice(), idx: 0, flipped: false, knew: 0, again: 0, seen: {}, title: title || 'Flashcards', objs: objs || null, kind: kind || null, back: back || '#/practice' };
     Store.save();
     go('#/cards');
   }
@@ -170,7 +170,11 @@
 
   function bindCommon(root) {
     $$('[data-practice]', root).forEach(function (b) { b.addEventListener('click', function () { practiceObjective(b.dataset.practice, +(b.dataset.n || 10)); }); });
-    $$('[data-cards]', root).forEach(function (b) { b.addEventListener('click', function () { var o = b.dataset.cards; startCards(o ? o.split(',') : null, o ? 'Flashcards: ' + o : 'Flashcards', location.hash || '#/'); }); });
+    $$('[data-cards]', root).forEach(function (b) { b.addEventListener('click', function () {
+      var o = b.dataset.cards;
+      if (o === 'acronyms') { startCards(null, 'Acronyms', location.hash || '#/', 'acronym'); return; }
+      startCards(o ? o.split(',') : null, o ? 'Flashcards: ' + o : 'Flashcards', location.hash || '#/');
+    }); });
     $$('[data-act="review"]', root).forEach(function (b) { b.addEventListener('click', function (e) { e.preventDefault(); startReview(); }); });
     $$('[data-smart]', root).forEach(function (b) { b.addEventListener('click', function () { var sel = $('input[name="smartN"]:checked', root); startSmart(sel ? +sel.value : +b.dataset.smart); }); });
     $$('[data-drill]', root).forEach(function (b) { b.addEventListener('click', function () { var o = b.dataset.drill; startDrill(o === 'weak' ? weakObjs() : o ? o.split(',') : null, o === 'weak' ? 'Drill: focus areas' : o ? 'Drill: ' + o : 'Endless drill'); }); });
@@ -334,9 +338,9 @@
   /* order = display order of option indices. ans = {sel, ok} once answered. reveal = show correctness and explanations. */
   function questionHTML(q, order, ans, reveal) {
     var nCorrect = Grading.correctIdx(q).length, multi = q.type === 'mr';
-    var h = '<div class="qmeta"><span class="tag">' + q.obj + '</span><span>' + esc(lessonTitle(q.obj)) + '</span>' + (q.gen ? '<span class="tag">Term quiz</span>' : '<span class="tag">' + DIFF[q.d] + '</span>') + (multi ? '<span class="tag strong">Choose ' + NUM[nCorrect] + '</span>' : '') + '</div>';
+    var h = '<div class="qmeta"><span class="tag">' + q.obj + '</span><span>' + esc(lessonTitle(q.obj)) + '</span>' + (q.gen ? '<span class="tag">' + (q.acr ? 'Acronym quiz' : 'Term quiz') + '</span>' : '<span class="tag">' + DIFF[q.d] + '</span>') + (multi ? '<span class="tag strong">Choose ' + NUM[nCorrect] + '</span>' : '') + '</div>';
     if (q.s) h += '<div class="scenario">' + fmt(q.s) + '</div>';
-    var qt = q.gen ? (function () { var p = q.q.split('\n'); return esc(p[0]) + '<span class="quote">' + esc(p.slice(1).join(' ')) + '</span>'; })() : fmt(q.q);
+    var qt = q.gen && !q.acr ? (function () { var p = q.q.split('\n'); return esc(p[0]) + '<span class="quote">' + esc(p.slice(1).join(' ')) + '</span>'; })() : fmt(q.q);
     h += '<fieldset' + (reveal ? ' disabled' : '') + '><legend class="qtext">' + qt + '</legend><div class="opts">';
     order.forEach(function (i, pos) {
       var o = q.o[i], picked = ans && ans.sel.indexOf(i) >= 0, cls = multi ? ' multi' : '';
@@ -472,7 +476,7 @@
       main.innerHTML = bar + '<div class="flash"><h1>Deck finished</h1><p class="lede muted" style="margin:.8rem 0 1.6rem">You knew ' + plural(F.knew, 'card') + ' and marked ' + F.again + ' to see again. Cards you know come back after longer and longer gaps.</p>' +
         '<div class="row"><button class="btn" id="moreCards">Study more cards</button>' + (F.objs ? '<button class="btn quiet" id="cardsPractice">Practice questions on these topics</button>' : '<button class="btn quiet" data-smart="10">Practice questions</button>') + '<a class="btn ghost" href="' + F.back + '">Done</a></div></div>';
       bindCommon();
-      $('#moreCards').addEventListener('click', function () { startCards(F.objs, F.title, F.back); });
+      $('#moreCards').addEventListener('click', function () { startCards(F.objs, F.title, F.back, F.kind); });
       var cp = $('#cardsPractice'); if (cp) cp.addEventListener('click', function () { startSession({ title: 'Practice: ' + F.objs.join(', '), qids: pickQuestions(F.objs, 10, { pool: 'all' }), objs: F.objs, pool: 'all', back: F.back }); });
       keyHandler = function (e) { if (e.key === 'Escape') go(F.back); };
       return;
@@ -480,7 +484,7 @@
     var c = cardById(F.ids[F.idx]), rec = Store.data.cards[c.id];
     main.innerHTML = bar + '<div class="flash"><button class="card' + (F.flipped ? ' flipped' : '') + '" id="card" aria-live="polite" aria-label="' + (F.flipped ? 'Definition shown. Press to show the term.' : 'Term shown. Press to reveal the definition.') + '">' +
       (F.flipped ? '<span class="face-term" style="font-size:var(--step-1)">' + esc(c.term) + '</span><span class="face-def">' + esc(c.def) + '</span><span class="hint">From lesson ' + c.obj + ' ' + esc(lessonTitle(c.obj)) + '</span>'
-        : '<span class="hint">' + (rec ? 'Review' : 'New term') + '</span><span class="face-term">' + esc(c.term) + '</span><span class="hint">Recall what it means, then flip the card</span>') + '</button>' +
+        : '<span class="hint">' + (rec ? 'Review' : c.kind === 'acronym' ? 'New acronym' : 'New term') + '</span><span class="face-term">' + esc(c.term) + '</span><span class="hint">' + (c.kind === 'acronym' ? 'Say what it stands for, then flip the card' : 'Recall what it means, then flip the card') + '</span>') + '</button>' +
       (F.flipped ? '<div class="card-actions"><button class="btn quiet" id="again">Again <kbd>1</kbd></button><button class="btn" id="knew">I knew it <kbd>2</kbd></button></div>' : '<div class="card-actions"><span></span><button class="btn" id="flip">Show definition <kbd>Space</kbd></button></div>') + '</div>';
     function flip() { F.flipped = !F.flipped; Store.save(); viewCards(); $('#card').focus(); }
     function grade(knew) {
@@ -506,13 +510,13 @@
     var D = Store.data, due = Store.dueReview().length, missed = Store.missedIds().filter(qById).length;
     var cq = Store.cardQueue(cardIds(null), 20);
     var total = SEC.questions.length + SEC.termQuestions.length;
-    var out = '<div class="page"><div class="phead"><h1>Practice</h1><p class="lede">' + SEC.questions.length + ' exam-style questions, ' + SEC.termQuestions.length + ' term quizzes, ' + SEC.terms.length + ' flashcards and ' + SEC.pbqs.length + ' hands-on labs. Practice mode explains every answer right away.</p></div>';
+    var out = '<div class="page"><div class="phead"><h1>Practice</h1><p class="lede">' + SEC.questions.length + ' exam-style questions, ' + SEC.termQuestions.length + ' term and acronym quizzes, ' + SEC.terms.length + ' flashcards and ' + SEC.pbqs.length + ' hands-on labs. Practice mode explains every answer right away.</p></div>';
     if (D.activeExam && !D.activeExam.submitted) out += '<div class="notice"><span><strong>A mock exam is in progress.</strong></span><div class="row"><a class="btn sm" href="#/exam">Return to exam</a><button class="btn sm quiet" data-act="abandon">Abandon it</button></div></div>';
     out += '<section class="quick" aria-label="Quick start">' +
       '<div class="tile primary"><h3>' + icon('practice') + 'Smart practice</h3><p>Due reviews, your weakest objectives and new questions, mixed for you.</p><div class="row"><div class="seg" role="radiogroup" aria-label="Number of questions">' + [5, 10, 20, 40].map(function (n) { return '<label><input type="radio" name="smartN" value="' + n + '"' + (n === 10 ? ' checked' : '') + '><span>' + n + '</span></label>'; }).join('') + '</div><button class="btn" data-smart="10">Start</button></div></div>' +
       '<div class="tile"><h3>' + icon('drill') + 'Endless drill</h3><p>Questions keep coming until you stop. A good warm-up or a long study block.</p><div class="row"><button class="btn quiet" data-drill="">All topics</button><button class="btn quiet" data-drill="weak">Focus areas</button></div></div>' +
       '<div class="tile"><h3>' + icon('review') + 'Spaced review</h3><p>' + (due ? plural(due, 'missed question') + ' due now, plus fresh questions on the same topics.' : 'Nothing due right now. Missed questions return after 1, 3, 7, 16 and 35 days.') + '</p><div class="row"><button class="btn quiet" data-act="review"' + (due ? '' : ' disabled') + '>Review ' + due + '</button>' + (missed ? '<button class="btn ghost" data-act="missed">Retry all ' + missed + ' missed</button>' : '') + '</div></div>' +
-      '<div class="tile"><h3>' + icon('cards') + 'Flashcards</h3><p>' + cq.due.length + ' due and ' + cq.fresh.length + ' new key terms from the lessons.</p><div class="row"><button class="btn quiet" data-cards="">Study ' + cq.queue.length + ' cards</button></div></div>' +
+      '<div class="tile"><h3>' + icon('cards') + 'Flashcards</h3><p>' + cq.due.length + ' due and ' + cq.fresh.length + ' new cards: key terms from the lessons and ' + cardIds(null, 'acronym').length + ' exam acronyms.</p><div class="row"><button class="btn quiet" data-cards="">Study ' + cq.queue.length + ' cards</button><button class="btn ghost" data-cards="acronyms">Acronyms only</button></div></div>' +
       '</section>';
     // Topic picker
     out += '<section class="section" id="topics"><div class="section-head"><h2>Choose topics</h2><span class="muted small">Unseen and missed questions come first</span></div><form id="topicForm"><div class="picker">' +
