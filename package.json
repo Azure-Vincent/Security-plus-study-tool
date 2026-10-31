@@ -1,6 +1,6 @@
 {
   "name": "security-plus-study-lab",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Interactive CompTIA Security+ (SY0-701) study app with lessons, practice questions, timed mock exams, PBQ simulations and spaced review. Runs entirely in the browser.",
   "private": true,
   "scripts": {
