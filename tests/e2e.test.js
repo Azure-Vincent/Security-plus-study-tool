@@ -63,13 +63,21 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
         await page.waitForSelector('#feedback');
         assert.equal(await page.locator('.opt .why').count(), await page.locator('.opt').count(), 'every option explained');
         if (await page.locator('#feedback.bad').count()) missed++;
+        assert.match(await text('.srs-note'), /back in|review in|returns only/i, 'feedback says when the question returns');
+        if (i === 0 && await page.locator('[data-regrade="0"]').count()) {
+          await page.keyboard.press('g');
+          await page.waitForSelector('[data-regrade="0"][aria-pressed="true"]');
+          assert.match(await text('.srs-note'), /10 min/, 'a guess comes back soon');
+          await page.keyboard.press('g');
+          await page.waitForSelector('[data-regrade="0"][aria-pressed="false"]');
+        }
         await page.keyboard.press('Enter');
       }
       await page.waitForSelector('text=By objective');
       assert.match(await text('.summary-score'), /\/10/);
     });
 
-    await t.test('Progress persists across reload; the daily goal updates; missed items enter review', async () => {
+    await t.test('Progress persists across reload; the daily goal updates; due items appear as the daily review', async () => {
       await page.goto(base + '#/');
       await page.reload();
       await page.waitForSelector('.today-top');
@@ -77,11 +85,17 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
       const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('secplus.progress.v1')));
       assert.equal(Object.keys(stored.q).length, 10);
       assert.ok(stored.lessons['1.1'].done);
-      if (missed) {
-        await page.click('.alt[data-act="review"]');
-        await page.waitForSelector('.opt');
-        assert.match(await text('.sbar'), /Spaced review/);
-      }
+      assert.ok(Object.values(stored.q).every((r) => r.srs && r.srs.due > Date.now()), 'every answer is scheduled for later');
+      assert.equal(await page.locator('.start-main [data-act="review"]').count(), 0, 'nothing due yet');
+      // Jump two days ahead by moving every due time back.
+      await page.evaluate(() => { Object.values(Store.data.q).forEach((r) => { r.srs.due -= 2 * 86400000; }); Store.save(); });
+      await page.reload();
+      await page.waitForSelector('.start-main [data-act="review"]');
+      assert.match(await text('.start-main'), /10 questions due/);
+      await page.click('.start-main [data-act="review"]');
+      await page.waitForSelector('.opt');
+      assert.match(await text('.sbar'), /Daily review/);
+      assert.ok(missed >= 0);
     });
 
     await t.test('Try a similar question after a miss, and endless drill keeps going', async () => {
@@ -113,12 +127,16 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
       await page.waitForSelector('#card');
       await page.keyboard.press(' ');
       await page.waitForSelector('#knew');
-      await page.keyboard.press('2');
+      assert.equal(await page.locator('.grade-row .grade').count(), 4, 'Again, Hard, Good and Easy');
+      assert.match(await text('#knew'), /1 day/, 'each button shows when the card returns');
+      await page.keyboard.press('3');
       await page.keyboard.press(' ');
       await page.keyboard.press('1');
       assert.match(await text('.sbar .count'), /Card 3 of 21/, 'a missed card goes back in the deck');
       const cards = await page.evaluate(() => Store.data.cards);
       assert.equal(Object.keys(cards).length, 2);
+      const ivls = Object.values(cards).map((c) => c.srs.ivl).sort();
+      assert.deepEqual(ivls, [0, 1]);
     });
 
     await t.test('Topic picker starts a filtered session', async () => {
@@ -259,6 +277,12 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
       await page.check('#settings input[name="theme"][value="sepia"]', { force: true });
       await page.check('#settings input[name="text"][value="l"]', { force: true });
       await page.check('#settings input[name="goal"][value="30"]', { force: true });
+      await page.check('#settings input[name="srs"][value="missed"]', { force: true });
+      const exam = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+      await page.fill('#examDate', exam);
+      await page.waitForSelector('#clearExam');
+      assert.equal(await page.evaluate(() => Store.data.settings.examDate), exam);
+      assert.equal(await page.evaluate(() => Store.srsMode()), 'missed');
       await page.keyboard.press('Escape');
       await page.reload();
       await page.waitForSelector('.stats');
@@ -266,6 +290,7 @@ test('complete study flow', { skip, timeout: 240000 }, async (t) => {
       assert.equal(await page.evaluate(() => document.documentElement.dataset.text), 'l');
       await page.goto(base + '#/');
       assert.match(await text('.today-top'), /of 30/);
+      assert.match(await text('.today-top'), /exam is in (19|20|21) days/i);
     });
 
     await t.test('Phone layout: bottom tabs and no sideways scrolling', async () => {

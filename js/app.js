@@ -98,7 +98,7 @@
     if (!qids.length) { toast('No questions match that selection.'); return; }
     var orders = {};
     qids.forEach(function (id) { orders[id] = optionOrder(qById(id)); });
-    Store.data.practice = { id: Date.now(), mode: cfg.mode || 'practice', title: cfg.title, qids: qids, idx: 0, answers: {}, orders: orders, back: cfg.back || '#/practice', objs: cfg.objs || null, endless: !!cfg.endless, pool: cfg.pool || 'bank', done: false };
+    Store.data.practice = { id: Date.now(), mode: cfg.mode || 'practice', title: cfg.title, qids: qids, idx: 0, answers: {}, orders: orders, back: cfg.back || '#/practice', objs: cfg.objs || null, endless: !!cfg.endless, pool: cfg.pool || 'bank', done: false, then: cfg.then || null };
     Store.save();
     go('#/session');
   }
@@ -107,14 +107,32 @@
   function startDrill(objs, title) {
     startSession({ title: title || 'Endless drill', qids: pickQuestions(objs, 5, { pool: 'all' }), objs: objs, endless: true, pool: 'all', back: '#/practice' });
   }
+  /* Daily review: questions due today, plus a few fresh questions on topics you recently missed,
+     then the flashcards due today. */
   function startReview() {
-    var due = Store.dueReview().slice(0, 15);
-    var objs = [];
-    due.forEach(function (id) { var q = qById(id); if (q && objs.indexOf(q.obj) < 0) objs.push(q.obj); });
-    var fresh = objs.length ? pickQuestions(objs, 8, { exclude: due, pool: 'all' }).filter(function (id) { return !Store.data.q[id]; }) : [];
-    var qids = shuffle(due.filter(qById).concat(fresh.slice(0, Math.max(3, Math.ceil(due.length / 2)))));
-    if (!qids.length) { toast('Nothing is due for review right now.'); return; }
-    startSession({ mode: 'review', title: 'Spaced review', qids: qids, objs: objs, pool: 'all' });
+    var due = Store.dueReview().filter(qById).slice(0, 30);
+    if (!due.length) {
+      if (Store.dueCards().length) { startDueCards('#/'); return; }
+      toast('You are all caught up. Nothing is due for review.'); return;
+    }
+    var missedObjs = [];
+    due.forEach(function (id) { var q = qById(id), r = Store.data.q[id]; if (r && r.last === false && missedObjs.indexOf(q.obj) < 0) missedObjs.push(q.obj); });
+    var fresh = missedObjs.length ? pickQuestions(missedObjs, 6, { exclude: due, pool: 'all' }).filter(function (id) { return !Store.data.q[id]; }).slice(0, Math.min(6, Math.ceil(due.length / 3))) : [];
+    startSession({ mode: 'review', title: 'Daily review', qids: shuffle(due.concat(fresh)), objs: missedObjs, pool: 'all', back: '#/', then: 'cards' });
+  }
+  function startDueCards(back) {
+    var ids = Store.dueCards().filter(cardById).slice(0, 50);
+    if (!ids.length) { toast('No flashcards are due.'); return; }
+    Store.data.flash = { ids: ids, idx: 0, flipped: false, knew: 0, again: 0, seen: {}, title: 'Due flashcards', objs: null, kind: null, due: true, back: back || '#/' };
+    Store.save();
+    go('#/cards');
+  }
+  function reviewMinutes(q, c) { return Math.max(1, Math.round(q * 1 + c / 6)); }
+  function reviewSummary(q, c) {
+    var parts = [];
+    if (q) parts.push(plural(q, 'question'));
+    if (c) parts.push(plural(c, 'flashcard'));
+    return parts.join(' and ') + ' due';
   }
 
   /* ---------------- flashcards ---------------- */
@@ -199,23 +217,34 @@
     setTitle('Today');
     var D = Store.data, done = Store.todayCount(), goal = Store.goal(), streak = Store.streak();
     var answered = Object.keys(D.q).length, due = Store.dueReview().length;
-    var cq = Store.cardQueue(cardIds(null), 20), cardsDue = cq.due.length;
+    var cq = Store.cardQueue(cardIds(null), 20);
     var nl = nextLesson(), recs = Store.recommendations(4).filter(function (r) { return r.stats.status !== 'new'; });
     var h = new Date().getHours(), hello = h < 5 ? 'Studying late' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
     var lede = !answered ? 'Start with a short practice set to see where you stand, or open the first lesson.' :
       done >= goal ? 'You reached today’s goal. Anything more is extra practice.' :
       (goal - done) + ' more to reach today’s goal of ' + goal + '.';
+    var dte = Store.daysToExam();
+    if (dte !== null && dte >= 0) lede += ' ' + (dte === 0 ? 'Your exam is today. Good luck.' : 'Your exam is in ' + plural(dte, 'day') + '.');
     var out = '<div class="page">';
     if (D.activeExam && !D.activeExam.submitted) out += '<div class="notice"><span><strong>Your mock exam is still running.</strong> The timer kept going while you were away.</span><a class="btn sm" href="#/exam">Return to exam</a></div>';
     else if (D.practice && !D.practice.done && D.practice.idx < D.practice.qids.length && Object.keys(D.practice.answers).length) out += '<div class="notice info"><span>You have an unfinished session: ' + esc(D.practice.title) + '.</span><a class="btn sm quiet" href="#/session">Continue</a></div>';
     out += '<div class="today-top"><div><h1>' + hello + '</h1><p class="lede">' + lede + '</p></div>' +
       '<div class="goal">' + ring(done, goal) + '<div class="goal-text"><strong>' + (streak ? plural(streak, 'day') + ' in a row' : 'No streak yet') + '</strong><span>Questions and flashcards count toward your daily goal.</span></div></div></div>';
-    out += '<div class="start"><section class="start-main" aria-labelledby="pnow"><div class="stack"><h2 id="pnow">Practice now</h2><p>A mix picked for you: questions due for review, your weakest objectives, and new questions across all five domains.</p></div>' +
-      '<div class="row"><div class="seg" role="radiogroup" aria-label="Number of questions">' + [5, 10, 20].map(function (n) { return '<label><input type="radio" name="smartN" value="' + n + '"' + (n === 10 ? ' checked' : '') + '><span>' + n + '</span></label>'; }).join('') + '</div>' +
-      '<button class="btn big" data-smart="10">Start practice</button></div></section>' +
-      '<div class="start-alt">' +
-      '<button class="alt" data-act="review"' + (due ? '' : ' disabled') + '>' + icon('review', 24) + '<span class="alt-text"><strong>Review mistakes</strong><small>' + (due ? 'Questions you missed, back on schedule' : 'Nothing due. Missed questions return here.') + '</small></span><span class="count">' + due + '</span></button>' +
-      '<button class="alt" data-cards="">' + icon('cards', 24) + '<span class="alt-text"><strong>Flashcards</strong><small>' + (cardsDue ? cardsDue + ' due, plus new terms' : cq.fresh.length + ' terms not studied yet') + '</small></span><span class="count">' + Math.min(20, cq.queue.length) + '</span></button>' +
+    var dueQ = Store.dueReview().filter(qById).length, dueC = Store.dueCards().filter(cardById).length, dueAll = dueQ + dueC;
+    var seg = '<div class="seg" role="radiogroup" aria-label="Number of questions">' + [5, 10, 20].map(function (n) { return '<label><input type="radio" name="smartN" value="' + n + '"' + (n === 10 ? ' checked' : '') + '><span>' + n + '</span></label>'; }).join('') + '</div>';
+    if (dueAll) {
+      out += '<div class="start"><section class="start-main" aria-labelledby="pnow"><div class="stack"><h2 id="pnow">Daily review</h2><p>' + reviewSummary(dueQ, dueC) + '. Reviewing on schedule is what moves material into long-term memory.</p></div>' +
+        '<div class="row"><button class="btn big" data-act="review">Start daily review</button><span class="small" style="opacity:.85">About ' + reviewMinutes(dueQ, dueC) + ' min</span></div></section>' +
+        '<div class="start-alt">' +
+        '<button class="alt" data-smart="10">' + icon('practice', 24) + '<span class="alt-text"><strong>Practice new questions</strong><small>Weak objectives and questions you have not seen</small></span><span class="count">10</span></button>';
+    } else {
+      var nextT = Store.nextReviewTime();
+      out += '<div class="start"><section class="start-main" aria-labelledby="pnow"><div class="stack"><h2 id="pnow">Practice now</h2><p>A mix picked for you: your weakest objectives and new questions across all five domains. Everything you answer is scheduled for review.</p></div>' +
+        '<div class="row">' + seg + '<button class="btn big" data-smart="10">Start practice</button></div></section>' +
+        '<div class="start-alt">' +
+        '<button class="alt" disabled>' + icon('review', 24) + '<span class="alt-text"><strong>Daily review</strong><small>' + (nextT === Infinity ? 'Questions and flashcards you study will come back here on schedule' : 'All caught up. Next review in ' + SRS.describe({ due: nextT }, Date.now())) + '</small></span><span class="count">0</span></button>';
+    }
+    out += '<button class="alt" data-cards="">' + icon('cards', 24) + '<span class="alt-text"><strong>Learn new flashcards</strong><small>' + cq.fresh.length + ' key terms and acronyms not studied yet</small></span><span class="count">' + Math.min(20, cq.queue.length) + '</span></button>' +
       (nl ? '<a class="alt" href="#/learn/' + nl.id + '">' + icon('read', 24) + '<span class="alt-text"><strong>' + (Object.keys(D.lessons).length ? 'Continue reading' : 'Start the first lesson') + '</strong><small>' + nl.id + ' ' + esc(lessonTitle(nl.id)) + '</small></span><span class="count">' + SEC.lessons[nl.id].minutes + 'm</span></a>' : '<a class="alt" href="#/practice">' + icon('exam', 24) + '<span class="alt-text"><strong>All lessons read</strong><small>Try a timed mock exam</small></span><span></span></a>') +
       '</div></div>';
     if (recs.length) {
@@ -230,11 +259,16 @@
       var st = Store.domainStats(d.id);
       return '<div class="dbar"><div class="name">' + esc(d.title) + '<span>' + d.weight + '% of exam</span></div>' + meter(st.mastery, levelClass(st.mastery)) + '<span class="v">' + pct(st.mastery) + '</span></div>';
     }).join('') + '</div></div>' +
-      '<div><h2>Last two weeks</h2><p class="muted small" style="margin:.3rem 0 1rem">Questions and flashcards per day.</p><div class="activity" role="img" aria-label="Daily practice over the last 14 days">' + act.map(function (a) { return '<span class="' + (a.n ? '' : 'zero') + '" style="height:' + Math.max(6, Math.round(a.n / maxA * 100)) + '%" title="' + a.day + ': ' + a.n + '"></span>'; }).join('') + '</div><div class="activity-axis"><span>2 weeks ago</span><span>Today</span></div>' +
+      '<div><h2>Last two weeks</h2><p class="muted small" style="margin:.3rem 0 1rem">Questions and flashcards per day.</p><div class="activity" role="img" aria-label="Daily practice over the last 14 days">' + act.map(function (a) { return '<span class="' + (a.n ? '' : 'zero') + '" style="height:' + Math.max(6, Math.round(a.n / maxA * 100)) + '%" title="' + a.day + ': ' + a.n + '"></span>'; }).join('') + '</div><div class="activity-axis"><span>2 weeks ago</span><span>Today</span></div>' + comingUp() +
       (D.exams.length ? '<p style="margin-top:1.4rem">Last mock exam: <strong>' + pct(D.exams[0].score) + '</strong> on ' + esc(D.exams[0].title.toLowerCase()) + '. <a href="#/progress">See history</a></p>' : '<p class="muted" style="margin-top:1.4rem">No mock exams yet. <a href="#/practice#exams">Try a quick 30-minute one</a> when you feel ready.</p>') + '</div></section>';
     out += versionNote() + '</div>';
     main.innerHTML = out;
     bindCommon();
+  }
+  function comingUp() {
+    var f = Store.forecast(8), tomorrow = f[1].q + f[1].cards, week = f.slice(1).reduce(function (a, d) { return a + d.q + d.cards; }, 0);
+    if (!week) return '';
+    return '<p class="small muted" style="margin-top:.8rem">Coming up: ' + tomorrow + ' review' + (tomorrow === 1 ? '' : 's') + ' tomorrow, ' + week + ' over the next 7 days. <a href="#/progress#memory">See the forecast</a></p>';
   }
   function versionNote() {
     var e = SEC.exam;
@@ -388,7 +422,8 @@
       '<div class="track" aria-hidden="true">' + track.map(function (id) { var a = S.answers[id]; return '<i class="' + (a ? (a.ok ? 'ok' : 'no') : id === q.id ? 'now' : '') + '"></i>'; }).join('') + '</div>';
     h += '<div class="session">' + questionHTML(q, S.orders[q.id], ans, !!ans);
     var canSimilar = ans && !ans.ok && similarFor(S, q);
-    h += '<div class="sfoot"><span class="keys">' + (ans ? 'Press <kbd>Enter</kbd> for the next question' : 'Choose with <kbd>1</kbd>–<kbd>' + q.o.length + '</kbd>, then press <kbd>Enter</kbd>') + '</span><div class="row">' +
+    if (ans) h += srsNote(q, ans);
+    h += '<div class="sfoot"><span class="keys">' + (ans ? 'Press <kbd>Enter</kbd> for the next question' + (ans.ok ? ', <kbd>G</kbd> if you guessed, <kbd>E</kbd> if it was too easy' : '') : 'Choose with <kbd>1</kbd>–<kbd>' + q.o.length + '</kbd>, then press <kbd>Enter</kbd>') + '</span><div class="row">' +
       (canSimilar ? '<button class="btn quiet" id="similarBtn">Try a similar question</button>' : '') +
       (ans ? '<button class="btn big" id="nextBtn">' + (S.endless || S.idx + 1 < S.qids.length ? 'Next question' : 'See results') + '</button>' : '<button class="btn big" id="checkBtn" disabled>Check answer</button>') + '</div></div></div>';
     main.innerHTML = h;
@@ -410,6 +445,15 @@
       checkBtn.addEventListener('click', check);
     }
     var nb = $('#nextBtn'); if (nb) nb.addEventListener('click', next);
+    function regrade(g) {
+      if (!ans || !ans.ok) return;
+      ans.grade = ans.grade === g ? 2 : g; // pressing the same choice again returns to the normal schedule
+      Store.regrade(q.id, ans.grade); Store.save();
+      var box = $('.srs-note'); if (box) box.outerHTML = srsNote(q, ans);
+      bindSrsNote();
+    }
+    function bindSrsNote() { $$('[data-regrade]').forEach(function (b) { b.addEventListener('click', function () { regrade(+b.dataset.regrade); }); }); }
+    bindSrsNote();
     var sb = $('#similarBtn'); if (sb) sb.addEventListener('click', function () {
       var id = similarFor(S, q); if (!id) return;
       S.qids.splice(S.idx + 1, 0, id); S.orders[id] = optionOrder(qById(id)); Store.save();
@@ -422,8 +466,25 @@
     keyHandler = function (e) {
       if (e.key === 'Enter') { e.preventDefault(); if (ans) next(); else if (checkBtn && !checkBtn.disabled) check(); return; }
       if (e.key === 'Escape') { $('#endBtn').click(); return; }
+      if (ans && ans.ok && e.key.toLowerCase() === 'g') { regrade(0); return; }
+      if (ans && ans.ok && e.key.toLowerCase() === 'e') { regrade(3); return; }
       if (!ans) optionKey(e);
     };
+  }
+  // Tells the learner when this question comes back, and lets them adjust that after a correct answer.
+  function srsNote(q, ans) {
+    var r = Store.data.q[q.id], st = r && r.srs;
+    if (!st) return '';
+    var scheduled = Store.srsMode() === 'all' || st.lapses > 0 || r.last === false;
+    var when = SRS.describe(st, Date.now());
+    var msg;
+    if (!ans.ok) msg = 'This question comes back in your next daily review, in about ' + when + '.';
+    else if (!scheduled) msg = 'Spaced repetition is set to mistakes only, so this question returns only if you miss it later.';
+    else if (ans.grade === 0) msg = 'Marked as guessed. It comes back in about ' + when + '.';
+    else if (ans.grade === 3) msg = 'Marked as easy. Next review in ' + when + '.';
+    else msg = 'Next review in ' + when + '.';
+    var btns = ans.ok && scheduled ? '<span class="row"><button class="btn ghost sm' + (ans.grade === 0 ? ' on' : '') + '" data-regrade="0" aria-pressed="' + (ans.grade === 0) + '">I guessed</button><button class="btn ghost sm' + (ans.grade === 3 ? ' on' : '') + '" data-regrade="3" aria-pressed="' + (ans.grade === 3) + '">Too easy</button></span>' : '';
+    return '<div class="srs-note" aria-live="polite"><span>' + icon('review', 18) + ' ' + msg + '</span>' + btns + '</div>';
   }
   function similarFor(S, q) {
     var ids = pickQuestions([q.obj], 1, { exclude: S.qids, pool: 'all' });
@@ -447,7 +508,9 @@
     out += '<div class="session"><h1>' + (ids.length ? (right === ids.length ? 'Every answer correct' : 'Session finished') : 'Nothing answered') + '</h1>';
     if (ids.length) {
       out += '<div class="summary-score"><span class="big">' + right + '/' + ids.length + '</span><div style="flex:1;min-width:12rem">' + meter(right / ids.length, levelClass(right / ids.length)) + '<p class="muted small" style="margin-top:.4rem">' + pct(right / ids.length) + ' correct in practice mode.' + (missedObjs.length ? ' Missed questions come back in spaced review.' : '') + '</p></div></div>';
-      out += '<div class="row" style="margin-bottom:2rem">' + (missedObjs.length ? '<button class="btn" id="freshBtn">New questions on what I missed</button>' : '<button class="btn" data-smart="10">Practice 10 more</button>') +
+      var dueC = S.then === 'cards' ? Store.dueCards().filter(cardById).length : 0;
+      out += '<div class="row" style="margin-bottom:2rem">' + (dueC ? '<button class="btn" id="dueCardsBtn">Continue with ' + plural(dueC, 'due flashcard') + '</button>' : '') +
+        (missedObjs.length ? '<button class="btn' + (dueC ? ' quiet' : '') + '" id="freshBtn">New questions on what I missed</button>' : '<button class="btn' + (dueC ? ' quiet' : '') + '" data-smart="10">Practice 10 more</button>') +
         '<button class="btn quiet" data-cards="' + objs.join(',') + '">Flashcards for these topics</button><a class="btn ghost" href="' + S.back + '">Done</a></div>';
       out += '<h2>By objective</h2><ul class="rows" style="margin:.8rem 0 2rem">' + objs.map(function (o) {
         var b = byObj[o];
@@ -460,6 +523,7 @@
     } else out += '<p class="lede muted" style="margin:1rem 0 2rem">You ended the session before answering. <a href="' + S.back + '">Go back</a></p>';
     main.innerHTML = out + '</div>';
     bindCommon();
+    var dcb = $('#dueCardsBtn'); if (dcb) dcb.addEventListener('click', function () { startDueCards(S.back); });
     var fb = $('#freshBtn');
     if (fb) fb.addEventListener('click', function () { startSession({ title: 'New questions: ' + missedObjs.join(', '), qids: pickQuestions(missedObjs, 10, { exclude: S.qids, pool: 'all' }), objs: missedObjs, back: S.back, pool: 'all' }); });
     keyHandler = function (e) { if (e.key === 'Escape') go(S.back); };
@@ -473,10 +537,11 @@
     var bar = '<div class="sbar"><a class="icon-btn" href="' + F.back + '" id="cardsClose" aria-label="Close flashcards">' + icon('close', 22) + '</a><span class="title">' + esc(F.title) + '</span><span class="count">' + (F.idx < F.ids.length ? 'Card ' + (F.idx + 1) + ' of ' + F.ids.length : 'Finished') + '</span></div>' +
       '<div class="track" aria-hidden="true">' + F.ids.map(function (id, i) { return '<i class="' + (i < F.idx ? 'ok' : i === F.idx ? 'now' : '') + '"></i>'; }).join('') + '</div>';
     if (F.idx >= F.ids.length) {
-      main.innerHTML = bar + '<div class="flash"><h1>Deck finished</h1><p class="lede muted" style="margin:.8rem 0 1.6rem">You knew ' + plural(F.knew, 'card') + ' and marked ' + F.again + ' to see again. Cards you know come back after longer and longer gaps.</p>' +
-        '<div class="row"><button class="btn" id="moreCards">Study more cards</button>' + (F.objs ? '<button class="btn quiet" id="cardsPractice">Practice questions on these topics</button>' : '<button class="btn quiet" data-smart="10">Practice questions</button>') + '<a class="btn ghost" href="' + F.back + '">Done</a></div></div>';
+      var nextQ = Store.dueReview().filter(qById).length;
+      main.innerHTML = bar + '<div class="flash"><h1>' + (F.due ? 'Review finished' : 'Deck finished') + '</h1><p class="lede muted" style="margin:.8rem 0 1.6rem">You remembered ' + plural(F.knew, 'card') + ' and marked ' + F.again + ' to see again. Each card is scheduled for its next review, with longer gaps the better you know it.</p>' +
+        '<div class="row">' + (F.due ? (nextQ ? '<button class="btn" data-act="review">Review ' + plural(nextQ, 'due question') + '</button>' : '') : '<button class="btn" id="moreCards">Study more cards</button>') + (F.objs ? '<button class="btn quiet" id="cardsPractice">Practice questions on these topics</button>' : '<button class="btn quiet" data-smart="10">Practice questions</button>') + '<a class="btn ghost" href="' + F.back + '">Done</a></div></div>';
       bindCommon();
-      $('#moreCards').addEventListener('click', function () { startCards(F.objs, F.title, F.back, F.kind); });
+      var mc = $('#moreCards'); if (mc) mc.addEventListener('click', function () { startCards(F.objs, F.title, F.back, F.kind); });
       var cp = $('#cardsPractice'); if (cp) cp.addEventListener('click', function () { startSession({ title: 'Practice: ' + F.objs.join(', '), qids: pickQuestions(F.objs, 10, { pool: 'all' }), objs: F.objs, pool: 'all', back: F.back }); });
       keyHandler = function (e) { if (e.key === 'Escape') go(F.back); };
       return;
@@ -485,21 +550,22 @@
     main.innerHTML = bar + '<div class="flash"><button class="card' + (F.flipped ? ' flipped' : '') + '" id="card" aria-live="polite" aria-label="' + (F.flipped ? 'Definition shown. Press to show the term.' : 'Term shown. Press to reveal the definition.') + '">' +
       (F.flipped ? '<span class="face-term" style="font-size:var(--step-1)">' + esc(c.term) + '</span><span class="face-def">' + esc(c.def) + '</span><span class="hint">From lesson ' + c.obj + ' ' + esc(lessonTitle(c.obj)) + '</span>'
         : '<span class="hint">' + (rec ? 'Review' : c.kind === 'acronym' ? 'New acronym' : 'New term') + '</span><span class="face-term">' + esc(c.term) + '</span><span class="hint">' + (c.kind === 'acronym' ? 'Say what it stands for, then flip the card' : 'Recall what it means, then flip the card') + '</span>') + '</button>' +
-      (F.flipped ? '<div class="card-actions"><button class="btn quiet" id="again">Again <kbd>1</kbd></button><button class="btn" id="knew">I knew it <kbd>2</kbd></button></div>' : '<div class="card-actions"><span></span><button class="btn" id="flip">Show definition <kbd>Space</kbd></button></div>') + '</div>';
+      (F.flipped ? '<div class="grade-row" role="group" aria-label="How well did you remember it?">' + Store.cardPreview(c.id).map(function (g) {
+        return '<button class="btn ' + (g.grade === 2 ? '' : 'quiet') + ' grade" data-grade="' + g.grade + '"' + (g.grade === 2 ? ' id="knew"' : g.grade === 0 ? ' id="again"' : '') + '><span>' + g.label + ' <kbd>' + (g.grade + 1) + '</kbd></span><small>' + g.when + '</small></button>';
+      }).join('') + '</div><p class="grade-hint">How well did you remember it? The time under each button is when you will see the card again.</p>'
+        : '<div class="card-actions"><span></span><button class="btn" id="flip">Show definition <kbd>Space</kbd></button></div>') + '</div>';
     function flip() { F.flipped = !F.flipped; Store.save(); viewCards(); $('#card').focus(); }
-    function grade(knew) {
-      Store.recordCard(c.id, knew); renderNav('practice');
-      if (knew) F.knew++; else { F.again++; F.seen[c.id] = (F.seen[c.id] || 0) + 1; if (F.seen[c.id] <= 2) F.ids.push(c.id); }
+    function grade(g) {
+      Store.recordCard(c.id, g); renderNav('practice');
+      if (g > 0) F.knew++; else { F.again++; F.seen[c.id] = (F.seen[c.id] || 0) + 1; if (F.seen[c.id] <= 2) F.ids.push(c.id); }
       F.idx++; F.flipped = false; Store.save(); viewCards();
     }
     $('#card').addEventListener('click', flip);
     var fb = $('#flip'); if (fb) fb.addEventListener('click', flip);
-    var a = $('#again'); if (a) a.addEventListener('click', function () { grade(false); });
-    var k = $('#knew'); if (k) k.addEventListener('click', function () { grade(true); });
+    $$('[data-grade]').forEach(function (b) { b.addEventListener('click', function () { grade(+b.dataset.grade); }); });
     keyHandler = function (e) {
       if (e.key === ' ' || e.key === 'Enter') { if (e.target.tagName === 'BUTTON' && e.target.id !== 'card') return; e.preventDefault(); flip(); }
-      else if (F.flipped && e.key === '1') grade(false);
-      else if (F.flipped && e.key === '2') grade(true);
+      else if (F.flipped && /^[1-4]$/.test(e.key)) grade(+e.key - 1);
       else if (e.key === 'Escape') go(F.back);
     };
   }
@@ -507,7 +573,7 @@
   /* ================= PRACTICE HUB ================= */
   function viewPractice(s, query) {
     setTitle('Practice');
-    var D = Store.data, due = Store.dueReview().length, missed = Store.missedIds().filter(qById).length;
+    var D = Store.data, due = Store.dueReview().filter(qById).length, dueC = Store.dueCards().filter(cardById).length, missed = Store.missedIds().filter(qById).length;
     var cq = Store.cardQueue(cardIds(null), 20);
     var total = SEC.questions.length + SEC.termQuestions.length;
     var out = '<div class="page"><div class="phead"><h1>Practice</h1><p class="lede">' + SEC.questions.length + ' exam-style questions, ' + SEC.termQuestions.length + ' term and acronym quizzes, ' + SEC.terms.length + ' flashcards and ' + SEC.pbqs.length + ' hands-on labs. Practice mode explains every answer right away.</p></div>';
@@ -515,7 +581,7 @@
     out += '<section class="quick" aria-label="Quick start">' +
       '<div class="tile primary"><h3>' + icon('practice') + 'Smart practice</h3><p>Due reviews, your weakest objectives and new questions, mixed for you.</p><div class="row"><div class="seg" role="radiogroup" aria-label="Number of questions">' + [5, 10, 20, 40].map(function (n) { return '<label><input type="radio" name="smartN" value="' + n + '"' + (n === 10 ? ' checked' : '') + '><span>' + n + '</span></label>'; }).join('') + '</div><button class="btn" data-smart="10">Start</button></div></div>' +
       '<div class="tile"><h3>' + icon('drill') + 'Endless drill</h3><p>Questions keep coming until you stop. A good warm-up or a long study block.</p><div class="row"><button class="btn quiet" data-drill="">All topics</button><button class="btn quiet" data-drill="weak">Focus areas</button></div></div>' +
-      '<div class="tile"><h3>' + icon('review') + 'Spaced review</h3><p>' + (due ? plural(due, 'missed question') + ' due now, plus fresh questions on the same topics.' : 'Nothing due right now. Missed questions return after 1, 3, 7, 16 and 35 days.') + '</p><div class="row"><button class="btn quiet" data-act="review"' + (due ? '' : ' disabled') + '>Review ' + due + '</button>' + (missed ? '<button class="btn ghost" data-act="missed">Retry all ' + missed + ' missed</button>' : '') + '</div></div>' +
+      '<div class="tile"><h3>' + icon('review') + 'Daily review</h3><p>' + (due || dueC ? reviewSummary(due, dueC) + ' today. ' : 'Nothing due right now. ') + (Store.srsMode() === 'all' ? 'Everything you study comes back just before you would forget it.' : 'Questions you miss come back on a schedule. Change this in Settings.') + '</p><div class="row"><button class="btn quiet" data-act="review"' + (due || dueC ? '' : ' disabled') + '>Review ' + (due + dueC) + '</button>' + (missed ? '<button class="btn ghost" data-act="missed">Retry all ' + missed + ' missed</button>' : '') + '</div></div>' +
       '<div class="tile"><h3>' + icon('cards') + 'Flashcards</h3><p>' + cq.due.length + ' due and ' + cq.fresh.length + ' new cards: key terms from the lessons and ' + cardIds(null, 'acronym').length + ' exam acronyms.</p><div class="row"><button class="btn quiet" data-cards="">Study ' + cq.queue.length + ' cards</button><button class="btn ghost" data-cards="acronyms">Acronyms only</button></div></div>' +
       '</section>';
     // Topic picker
@@ -793,13 +859,39 @@
     $('#resetPBQ').addEventListener('click', function () { if (confirm('Start this lab over from the beginning?')) { ctl.reset(); try { sessionStorage.removeItem(draftKey); } catch (e) { /* ignore */ } } });
   }
 
+
+  /* Memory: how much of the material is in long-term memory, by domain, and what is coming up. */
+  function memorySection() {
+    var allQ = SEC.questions.map(function (q) { return q.id; }).concat(SEC.termQuestions.map(function (q) { return q.id; }));
+    var m = Store.memory(allQ, cardIds(null));
+    var studied = m.total - m.new;
+    var seg = function (k, label) { return m[k] ? '<span class="mem-' + k + '" style="flex:' + m[k] + '" title="' + label + ': ' + m[k] + '"></span>' : ''; };
+    var fc = Store.forecast(14), max = Math.max.apply(null, fc.map(function (f) { return f.q + f.cards; }).concat([1]));
+    var dueNow = Store.dueReview().filter(qById).length + Store.dueCards().filter(cardById).length;
+    var days = Store.daysToExam();
+    var h = '<section class="section" id="memory"><div class="section-head"><h2>Memory</h2><span class="muted small">' + (Store.srsMode() === 'all' ? 'Spaced repetition: everything you study' : 'Spaced repetition: only your mistakes') + '</span></div>';
+    h += '<p class="muted small" style="margin:.3rem 0 .8rem">Each question and flashcard comes back just before you are likely to forget it, and the gap grows each time you remember. Items with a gap of ' + SRS.MATURE + ' days or more count as long-term memory.' + (days !== null && days > 0 ? ' Your exam is in ' + plural(days, 'day') + ', so no gap runs past it.' : '') + '</p>';
+    h += '<div class="stats"><div class="stat"><div class="v">' + pct(studied ? m.mature / studied : null) + '</div><div class="l">of what you studied is in long-term memory</div></div><div class="stat"><div class="v">' + studied + '</div><div class="l">of ' + m.total + ' items studied</div></div><div class="stat"><div class="v">' + dueNow + '</div><div class="l">due now</div></div></div>';
+    h += '<div class="mem-bar" role="img" aria-label="Learning ' + m.learning + ', short-term ' + m.young + ', long-term ' + m.mature + ', not started ' + m.new + '">' + seg('learning', 'Learning') + seg('young', 'Short-term') + seg('mature', 'Long-term') + seg('new', 'Not started') + '</div>';
+    h += '<ul class="mem-key small"><li><i class="mem-learning"></i>Learning ' + m.learning + '</li><li><i class="mem-young"></i>Short-term ' + m.young + '</li><li><i class="mem-mature"></i>Long-term ' + m.mature + '</li><li><i class="mem-new"></i>Not started ' + m.new + '</li></ul>';
+    h += '<div class="two" style="margin-top:1.2rem"><div><h3>By domain</h3><ul class="mem-domains">' + SEC.domains.map(function (d) {
+      var qs = allQ.filter(function (id) { var q = qById(id); return q && q.obj[0] === d.id; });
+      var cs = SEC.terms.filter(function (t) { return t.obj && t.obj[0] === d.id; }).map(function (t) { return t.id; });
+      var dm = Store.memory(qs, cs), learned = dm.young + dm.mature;
+      return '<li><span>' + d.id + '. ' + esc(d.title) + '</span>' + meter(dm.total ? learned / dm.total : 0, '') + '<span class="num small">' + pct(dm.total ? learned / dm.total : 0) + '</span></li>';
+    }).join('') + '</ul><p class="muted small">Share of each domain’s questions and flashcards you currently remember.</p></div>';
+    h += '<div><h3>Next 14 days</h3><div class="forecast" role="img" aria-label="Reviews due over the next 14 days">' + fc.map(function (f, i) {
+      var t = f.q + f.cards;
+      return '<div title="' + f.day + ': ' + f.q + ' questions, ' + f.cards + ' cards"><span style="height:' + Math.round(t / max * 100) + '%"></span><small>' + (i === 0 ? 'Today' : i % 2 ? '' : new Date(f.day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short' })) + '</small><b>' + (t || '') + '</b></div>';
+    }).join('') + '</div><p style="margin-top:.8rem"><button class="btn quiet sm" data-act="review"' + (dueNow ? '' : ' disabled') + '>Review ' + dueNow + ' due</button></p></div></div></section>';
+    return h;
+  }
+
   /* ================= PROGRESS ================= */
   function viewProgress() {
     setTitle('Progress');
     var D = Store.data, rd = Store.readiness();
     var n = 0, c = 0; Object.keys(D.q).forEach(function (k) { n += D.q[k].n; c += D.q[k].c; });
-    var boxes = [0, 0, 0, 0, 0, 0];
-    Object.keys(D.q).forEach(function (id) { var r = D.q[id]; if (r.box !== undefined) boxes[r.box]++; });
     var h = '<div class="page"><div class="phead"><h1>Progress</h1><p class="lede">' + (Store.memoryOnly() ? 'Your browser is blocking storage, so progress lasts only until this tab closes. Export a copy below.' : 'Saved automatically in this browser. Export a copy to move it to another device.') + '</p></div>';
     h += '<div class="stats"><div class="stat"><div class="v">' + n + '</div><div class="l">answers, ' + pct(n ? c / n : null) + ' correct</div></div><div class="stat"><div class="v">' + Store.streak() + '</div><div class="l">days in a row</div></div>' +
       '<div class="stat"><div class="v">' + Store.cardsLearned() + '</div><div class="l">of ' + SEC.terms.length + ' terms known</div></div><div class="stat"><div class="v">' + Object.keys(D.pbq).length + '</div><div class="l">of ' + SEC.pbqs.length + ' labs tried</div></div></div>';
@@ -807,6 +899,7 @@
     // 15 full weeks plus this week so far; rows are weekdays starting on Sunday.
     var act = Store.activity(15 * 7 + new Date().getDay() + 1);
     h += '<section class="section"><h2>Daily activity</h2><p class="muted small" style="margin:.3rem 0 .8rem">Last 16 weeks. Darker means more questions and flashcards.</p><div class="heat" role="img" aria-label="Daily activity for the last 16 weeks">' + act.map(function (a) { var l = a.n === 0 ? '' : a.n < 10 ? 'l1' : a.n < 25 ? 'l2' : 'l3'; return '<i class="' + l + '" title="' + a.day + ': ' + a.n + '"></i>'; }).join('') + '</div></section>';
+    h += memorySection();
     h += '<section class="section"><h2>By domain</h2><div class="table-wrap"><table><thead><tr><th scope="col">Domain</th><th scope="col" class="num">Weight</th><th scope="col" class="num">Answers</th><th scope="col" class="num">Accuracy</th><th scope="col">Mastery</th><th scope="col" class="num">Coverage</th></tr></thead><tbody>' +
       SEC.domains.map(function (d) { var s = Store.domainStats(d.id); return '<tr><th scope="row">' + d.id + '. ' + esc(d.title) + '</th><td class="num">' + d.weight + '%</td><td class="num">' + s.n + '</td><td class="num">' + pct(s.acc) + '</td><td>' + meter(s.mastery, levelClass(s.mastery)) + '</td><td class="num">' + pct(s.coverage) + '</td></tr>'; }).join('') + '</tbody></table></div></section>';
     h += '<section class="section"><h2>By objective</h2><p class="muted small" style="margin:.3rem 0 .8rem">Mastery combines your last 12 answers (75%) with your latest lab scores (25%). Needs work is below 60%, developing is 60 to 79%.</p><div class="table-wrap"><table class="obj-table"><thead><tr><th scope="col">Objective</th><th scope="col">Status</th><th scope="col" class="num">Answers</th><th scope="col" class="num">Recent</th><th scope="col" class="num">Labs</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody>' +
@@ -816,9 +909,8 @@
       }).join('') + '</tbody></table></div></section>';
     h += '<section class="section two"><div><h2>Labs</h2><div class="table-wrap" style="margin-top:.8rem"><table><thead><tr><th scope="col">Lab</th><th scope="col" class="num">Tries</th><th scope="col" class="num">Best</th></tr></thead><tbody>' +
       SEC.pbqs.map(function (p) { var r = D.pbq[p.id]; return '<tr><th scope="row"><a href="#/pbq/' + p.id + '">' + esc(p.title) + '</a></th><td class="num">' + (r ? r.attempts : 0) + '</td><td class="num">' + (r ? pct(r.best) : '–') + '</td></tr>'; }).join('') + '</tbody></table></div></div>' +
-      '<div><h2>Review schedule</h2><p class="muted small" style="margin-top:.3rem">A missed question moves up one box each time you get it right in review. Box 5 means it is retired.</p><ul class="boxes">' + boxes.map(function (b, i) { return '<li><strong>' + b + '</strong><span>' + (i === 0 ? 'Due now' : i === 5 ? 'Retired' : 'Box ' + i + ', ' + Math.round(Store.INTERVALS[i] / 86400000) + 'd') + '</span></li>'; }).join('') + '</ul>' +
-      '<p><button class="btn quiet sm" data-act="review"' + (Store.dueReview().length ? '' : ' disabled') + '>Review ' + Store.dueReview().length + ' due</button></p>' +
-      '<h2 style="margin-top:2rem">Mock exams</h2>' + (D.exams.length ? '<div class="table-wrap" style="margin-top:.8rem"><table><thead><tr><th scope="col">Date</th><th scope="col">Exam</th><th scope="col" class="num">Score</th></tr></thead><tbody>' + D.exams.map(function (e) { return '<tr><td>' + fmtDate(e.date) + '</td><td>' + esc(e.title) + '</td><td class="num">' + pct(e.score) + '</td></tr>'; }).join('') + '</tbody></table></div>' + (D.lastResult ? '<p style="margin-top:.6rem"><a href="#/results">Open the latest results</a></p>' : '') : '<p class="muted" style="margin-top:.6rem">No mock exams yet.</p>') + '</div></section>';
+      '<div>' +
+      '<h2>Mock exams</h2>' + (D.exams.length ? '<div class="table-wrap" style="margin-top:.8rem"><table><thead><tr><th scope="col">Date</th><th scope="col">Exam</th><th scope="col" class="num">Score</th></tr></thead><tbody>' + D.exams.map(function (e) { return '<tr><td>' + fmtDate(e.date) + '</td><td>' + esc(e.title) + '</td><td class="num">' + pct(e.score) + '</td></tr>'; }).join('') + '</tbody></table></div>' + (D.lastResult ? '<p style="margin-top:.6rem"><a href="#/results">Open the latest results</a></p>' : '') : '<p class="muted" style="margin-top:.6rem">No mock exams yet.</p>') + '</div></section>';
     h += '<section class="section estimate"><h2>Readiness estimate</h2><p style="margin:.6rem 0"><span class="big">' + (rd.coverage ? pct(rd.value) : '–') + '</span> <span class="muted">based on ' + pct(rd.coverage) + ' of the exam weight practiced so far</span></p><p class="muted small">This blends the mastery figures above, weighted by each domain’s share of the exam, and is lowered for objectives you have not practiced. It is an estimate from this app’s practice items only. It is not a CompTIA score, not on the 100 to 900 scale, and not a pass or fail prediction.</p></section>';
     h += '<section class="section"><h2>Your data</h2><div class="row" style="margin-top:.8rem"><button class="btn quiet" id="exportBtn">Export progress</button><label class="btn quiet file-btn">Import progress<input type="file" id="importFile" accept="application/json,.json"></label><button class="btn danger" id="resetBtn">Erase all progress</button></div></section></div>';
     main.innerHTML = h;
@@ -843,7 +935,7 @@
     h += '<h2>The exam it covers</h2><dl class="facts" style="margin:1rem 0 2rem"><div><dt>Exam</dt><dd>' + e.name + ' ' + e.versionLabel + '</dd></div><div><dt>Status</dt><dd>' + e.status + ', launched ' + e.launched + ', checked ' + e.verifiedOn + '</dd></div>' +
       '<div><dt>Format</dt><dd>Up to ' + e.maxQuestions + ' questions in ' + e.minutes + ' minutes. ' + e.questionTypes + '.</dd></div><div><dt>Passing score</dt><dd>' + e.passing + '</dd></div>' +
       '<div><dt>Domains</dt><dd>' + SEC.domains.map(function (d) { return d.id + '. ' + esc(d.title) + ' (' + d.weight + '%)'; }).join('<br>') + '</dd></div><div><dt>Next version</dt><dd>' + esc(e.upcoming.note) + '</dd></div></dl>';
-    h += '<h2>What is inside</h2><ul style="margin:1rem 0 2rem;padding-left:1.2rem"><li>' + Object.keys(SEC.lessons).length + ' lessons, one per objective, with key terms, diagrams, quick checks and comparisons.</li><li>' + SEC.questions.length + ' original exam-style questions at three difficulty levels, plus ' + SEC.termQuestions.length + ' term quizzes and ' + SEC.terms.length + ' flashcards built from the lessons.</li><li>' + SEC.pbqs.length + ' hands-on labs graded with partial credit.</li><li>Spaced review on a 1, 3, 7, 16 and 35 day schedule.</li><li>Everything runs on your device. No account, no server and no AI service.</li></ul>';
+    h += '<h2>What is inside</h2><ul style="margin:1rem 0 2rem;padding-left:1.2rem"><li>' + Object.keys(SEC.lessons).length + ' lessons, one per objective, with key terms, diagrams, quick checks and comparisons.</li><li>' + SEC.questions.length + ' original exam-style questions at three difficulty levels, plus ' + SEC.termQuestions.length + ' term quizzes and ' + SEC.terms.length + ' flashcards built from the lessons.</li><li>' + SEC.pbqs.length + ' hands-on labs graded with partial credit.</li><li>Spaced repetition for questions and flashcards, with an optional exam date so reviews finish in time.</li><li>Everything runs on your device. No account, no server and no AI service.</li></ul>';
     h += '<h2>Content and scoring</h2><p style="margin-top:.8rem">All lessons, questions and labs are original practice material written for the SY0-701 objectives. They are not exam dumps. This app is not affiliated with or endorsed by CompTIA. Practice percentages and the readiness estimate describe your results on these practice items only and do not predict an official score.</p><p class="small muted" style="margin-top:1.2rem">Typeface: Atkinson Hyperlegible Next and Mono by the Braille Institute, under the SIL Open Font License.</p></div>';
     main.innerHTML = h;
   }
@@ -864,23 +956,30 @@
       '<div class="setting"><span>Theme</span><div class="seg" role="radiogroup" aria-label="Theme">' + opt('theme', '', 'System', st.theme) + opt('theme', 'light', 'Light', st.theme) + opt('theme', 'sepia', 'Sepia', st.theme) + opt('theme', 'dark', 'Dark', st.theme) + '</div><span class="muted">Sepia is warmer and lower in contrast for long reading sessions.</span></div>' +
       '<div class="setting"><span>Text size</span><div class="seg" role="radiogroup" aria-label="Text size">' + opt('text', 's', 'Smaller', st.text) + opt('text', 'm', 'Standard', st.text || 'm') + opt('text', 'l', 'Larger', st.text) + '</div></div>' +
       '<div class="setting"><span>Daily goal</span><div class="seg" role="radiogroup" aria-label="Daily goal">' + [10, 20, 30, 50].map(function (g) { return opt('goal', String(g), g + ' a day', String(Store.goal())); }).join('') + '</div><span class="muted">Questions and flashcards count toward it.</span></div>' +
+      '<div class="setting"><span>Spaced repetition</span><div class="seg" role="radiogroup" aria-label="Spaced repetition">' + opt('srs', 'all', 'Everything', Store.srsMode()) + opt('srs', 'missed', 'Mistakes only', Store.srsMode()) + '</div><span class="muted">Everything: each question and flashcard comes back on a growing schedule until it is in long-term memory. Mistakes only: questions return only after you miss them.</span></div>' +
+      '<div class="setting"><span>Exam date</span><div class="row"><input type="date" name="examDate" id="examDate" value="' + esc(st.examDate || '') + '" min="' + new Date().toISOString().slice(0, 10) + '">' + '<button class="btn ghost sm" type="button" id="clearExam"' + (st.examDate ? '' : ' hidden') + '>Clear</button>' + '</div><span class="muted">Optional. Reviews are scheduled so nothing is left waiting past this day, and Today shows a countdown.</span></div>' +
       '<div class="setting"><a href="#/about" id="aboutLink">About this app and the exam</a></div>' +
       (desktop ? '<div class="setting"><span>Desktop app</span><button class="btn quiet" type="button" id="quitApp">Quit Security+ Study Lab</button><span class="muted">Stops the local app server. Your progress is already saved.</span></div>' : '') + '</form>';
-    dlg.addEventListener('change', function (e) {
+    dlg.onchange = function (e) {
       var t = e.target;
       if (t.name === 'theme') st.theme = t.value || undefined;
       if (t.name === 'text') st.text = t.value === 'm' ? undefined : t.value;
       if (t.name === 'goal') st.goal = +t.value;
+      if (t.name === 'srs') st.srs = t.value === 'missed' ? 'missed' : undefined;
+      if (t.name === 'examDate') { st.examDate = /^\d{4}-\d{2}-\d{2}$/.test(t.value) ? t.value : undefined; dlg.querySelector('#clearExam').hidden = !st.examDate; }
       Store.save(); applySettings(); renderNav();
-    });
+      if (t.name === 'srs' || t.name === 'examDate') route();
+    };
     dlg.querySelector('#aboutLink').addEventListener('click', function () { dlg.close(); });
+    var ce = dlg.querySelector('#clearExam');
+    ce.addEventListener('click', function () { st.examDate = undefined; Store.save(); dlg.querySelector('#examDate').value = ''; ce.hidden = true; route(); dlg.querySelector('#examDate').focus(); });
     var q = dlg.querySelector('#quitApp');
     if (q) q.addEventListener('click', function () {
       fetch('/__secplus_quit', { method: 'POST' }).catch(function () {}).then(function () {
         document.body.innerHTML = '<main style="padding:3rem;max-width:36rem;margin:auto;font-family:var(--sans)"><h1>Security+ Study Lab has closed</h1><p style="margin-top:1rem">Your progress is saved. You can close this window. Open the app again whenever you want to study.</p></main>';
       });
     });
-    dlg.showModal();
+    if (!dlg.open) dlg.showModal();
   }
   $$('[data-open-settings]', document).forEach(function (b) { b.addEventListener('click', openSettings); });
 

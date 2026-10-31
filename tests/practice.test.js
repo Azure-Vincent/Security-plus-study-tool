@@ -35,7 +35,7 @@ test('term questions are valid, explained, deterministic and never give the answ
   }
 });
 
-test('flashcard scheduling: due first, then new; again resets, knowing advances', () => {
+test('flashcard scheduling: due first, then new; again relearns soon, knowing advances', () => {
   const { SEC, Store } = load();
   const ids = SEC.terms.slice(0, 5).map((t) => t.id);
   let q = Store.cardQueue(ids, 20);
@@ -43,10 +43,17 @@ test('flashcard scheduling: due first, then new; again resets, knowing advances'
   Store.recordCard(ids[0], true);
   Store.recordCard(ids[1], false);
   q = Store.cardQueue(ids, 20);
-  same(q.due, [ids[1]], 'missed card is due now');
+  same(q.due, [], 'a missed card waits about 10 minutes');
+  same(Store.cardQueue(ids, 20, Date.now() + 11 * 60000).due, [ids[1]], 'then it is due');
   assert.ok(!q.queue.includes(ids[0]), 'known card waits a day');
   same(Store.cardQueue(ids, 20, Date.now() + 86400000 + 1000).due.sort(), [ids[0], ids[1]].sort());
   assert.equal(Store.cardsLearned(), 1);
+  // Four grades with previews: Again < Hard <= Good < Easy.
+  const p = Store.cardPreview(ids[2]);
+  same(p.map((x) => x.label), ['Again', 'Hard', 'Good', 'Easy']);
+  same(p.map((x) => x.when), ['10 min', '1 day', '1 day', '4 days']);
+  Store.recordCard(ids[2], 3);
+  assert.equal(Store.data.cards[ids[2]].srs.ivl, 4);
 });
 
 test('daily goal and streak count questions and flashcards', () => {
